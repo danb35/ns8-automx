@@ -55,7 +55,7 @@ The module:
 
 - Use `agent.ldapproxy.Ldapproxy()`: `get_domains_list()`, `get_domain(<user_domain>)`. The result holds a local endpoint (ldapproxy listens on `127.0.0.1`, no TLS needed on that hop), bind credentials, base DN, schema (`rfc2307` or `ad`).
 - The module image needs `org.nethserver.authorizations=cluster:accountconsumer`, and calls `agent.bind_user_domains([user_domain])`.
-- A container on a private podman network reaches ldapproxy at `10.0.2.2` if started with `--network=slirp4netns:allow_host_loopback=true`.
+- A container on a private podman network reaches ldapproxy at `10.0.2.2` if started with `--network=slirp4netns:allow_host_loopback=true`. With `--network=host` it is `127.0.0.1` (see 4.1).
 - Events: `user-domain-changed` (payload `{"domains": [...]}`) and `module-domain-changed`.
 - Use `Ldapproxy.get_ldap_users_search_filter_clause()` so hidden users are honored.
 
@@ -76,13 +76,13 @@ Fallback when no LDAP entry matches or LDAP is unreachable: **VERIFY** what auto
 
 ### 3.4 Traefik
 
-- The module needs `traefik@node:routeadm` and creates routes with the Traefik `set-route` action (host, upstream URL `http://127.0.0.1:<port>`, `lets_encrypt`, `http2https`). Routes are per host: N enabled domains means 2N routes plus any route for the node FQDN (see 4.4). Route instance names must be unique per host, for example `<module_id>-autoconfig-<domain>`. **VERIFY** exact `set-route`/`delete-route` parameter names against the Traefik module.
+- The module needs `traefik@node:routeadm` and creates routes with the Traefik `set-route` action (host, upstream URL, `lets_encrypt`, `http2https`). The upstream URL is `http://127.0.0.1:<TCP_PORT>`, where `<TCP_PORT>` is the node port allocated to this module (`org.nethserver.tcp-ports-demand=1`). That address is the node's loopback: the NS8 network documentation has web modules publish the container port on host loopback (`podman run --publish 127.0.0.1:${TCP_PORT}:<container port>`) and Traefik, which runs on the same node, reaches it there. It is not the container's own localhost; see 4.1 for what automx binds inside the container. Routes are per host: N enabled domains means 2N routes plus any route for the node FQDN (see 4.4). Route instance names must be unique per host, for example `<module_id>-autoconfig-<domain>`. **VERIFY** exact `set-route`/`delete-route` parameter names against the Traefik module.
 - Let's Encrypt HTTP-01 needs the hostname to already resolve to the node. DNS must therefore exist before the route is created (or the route creation is retried; see 6.2).
 - The automx documentation says to forward only its documented paths and never a client-supplied base URL. Derive the path allowlist from `automx openapi export` at build time (**VERIFY** the paths: Autoconfig, Autodiscover, mobileconfig) and create routes with those path prefixes. Outlook uses both `/autodiscover/autodiscover.xml` and `/Autodiscover/Autodiscover.xml`; Traefik path prefixes are case sensitive.
 
 ### 3.5 dnshelper
 
-Repository: `danb35/ns8-dnshelper` (release 0.1.1 at time of writing). Consumer contract:
+Repository: `danb35/ns8-dnshelper`, release 0.2.0 at time of writing (2026-09-21). The consumer contract below is from the 0.1.x README; the 0.2.0 release notes list no consumer API changes (new: Core-Networks provider, an admin Records page, a user guide), but re-check the README when implementing. Consumer contract:
 
 - Grant: `--label="org.nethserver.authorizations=dnshelper@cluster:dnswriter"`. The label is harmless if dnshelper is absent; ns8-core re-applies grants when dnshelper is installed later.
 - Detect: `agent.list_service_providers(rdb, 'dnshelper')`. Empty list means absent. Call the default instance (`cluster/default_instance/dnshelper`), typically `module/dnshelper1`.
@@ -97,7 +97,11 @@ Repository: `danb35/ns8-dnshelper` (release 0.1.1 at time of writing). Consumer 
 
 ### 4.1 Components
 
-- One rootless podman container running the pinned automx image (`automx serve`), bound to `127.0.0.1:<allocated TCP port>`, config mounted read-only. It has `/health/live` and `/health/ready`, which the systemd unit uses for readiness.
+- One rootless podman container running the pinned automx image (`automx serve`), config mounted read-only. It has `/health/live` and `/health/ready`, which the systemd unit uses for readiness.
+  - **Networking (default: private network namespace).** The unit runs `podman run ... --publish 127.0.0.1:${TCP_PORT}:<container port> --network=slirp4netns:allow_host_loopback=true ...`. Inside the container automx must listen on a non-loopback address (`automx serve --host 0.0.0.0 --port <container port>`): a listener on the container's own `127.0.0.1` cannot be reached through the published port, and upstream's example `--host 127.0.0.1` is for running it directly on a host. Exposure stays limited because the published port is bound to the node's loopback only.
+  - From inside this network namespace, ldapproxy is at `10.0.2.2:<ldap port>`, not `127.0.0.1` (3.3). Health checks and the Traefik route use the published loopback port on the node.
+  - **Alternative: `--network=host`.** automx listens directly on `127.0.0.1:${TCP_PORT}`, ldapproxy is at `127.0.0.1`, and no port proxy is involved (the NS8 docs note this is faster). Trade-off: no network isolation from the node's loopback services. Choose one during implementation; the default above is the isolated option and matches the NS8 web-module pattern.
+  - **File ownership.** The upstream image runs as UID 10001. In a rootless podman container the host module user maps to root inside, so files the module writes (`automx.conf`, mode 0600, containing the LDAP bind password) may be unreadable by UID 10001. Resolve with `--userns=keep-id` and a matching `--user`, or run the container process as the mapped module user, and confirm the read-only root filesystem and `/tmp` tmpfs still work (**VERIFY**).
 - A renderer (Python, in `imageroot/bin/`) that builds `automx.conf` from module state plus discovery data. It is a pure function of its inputs so it can be unit-tested with golden files and checked with `automx config validate`.
 - Actions and event handlers (Python) for the admin API.
 - Traefik routes managed by the module.
@@ -248,7 +252,7 @@ The domains table must state clearly, for domains with no dnshelper coverage, th
 
 ## 8. Security
 
-- Container: non-root as shipped (UID 10001), read-only root filesystem, config mounted read-only, no extra capabilities. Bound to loopback only; the only exposure is through Traefik.
+- Container: non-root as shipped (UID 10001), read-only root filesystem, config mounted read-only, no extra capabilities. The published port is bound to the node's loopback only; the only exposure is through Traefik.
 - Do not enable proxy-header trust in automx beyond what the packaged `serve` default allows. Do not forward client-supplied base URLs.
 - The LDAP bind credentials come from ldapproxy for the module's own bound domain; treat them as secrets (0600 file, not in Redis, not in backups, not in logs). Do not enable unsafe LDAP certificate modes; the hop to ldapproxy is local plaintext, so keep certificate settings at the automx default and confirm this is compatible with a non-TLS loopback endpoint (**VERIFY**).
 - Autoconfig responses contain server names and, via LDAP, a display name for an address the requester supplied. That is address-to-name disclosure by design of the protocol. Decide whether to restrict display names to authenticated lookups (they cannot be) or omit display names by default (**decision needed**: default on, with a setting to turn off).
@@ -288,6 +292,7 @@ The domains table must state clearly, for domains with no dnshelper coverage, th
 7. Which resolver tooling is available in the module's Python environment for the no-dnshelper DNS check, or whether `automx dns check` in the container is used.
 8. Display-name default (see section 8).
 9. Minimum NS8 core version.
+10. Container networking: default (private namespace plus published loopback port) or host network; the port automx listens on inside the image and whether `--host 0.0.0.0` is accepted by the packaged command; UID/file-ownership mapping for the rootless container (4.1).
 
 ## 12. Later phases
 
