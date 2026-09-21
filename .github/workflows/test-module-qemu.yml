@@ -38,7 +38,7 @@ jobs:
       # optional: build-images.sh's reponame is a template placeholder
       # (kickstart), shared with ns8-kickstart-postgresql. Sed it together with
       # this value if this repo is cloned into a differently named module.
-      image_name: kickstart
+      image_name: automx
       # update tested separately later, independent of this drop-in
       # scenarios: '["install","update"]'
       ui_tests_strategy: ${{ github.event.inputs.ui_tests == 'true' && 'always' || 'on_renovate_ui_change' }}
