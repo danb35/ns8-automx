@@ -1,0 +1,32 @@
+name: "Unit tests"
+
+# Python unit tests for imageroot/pypkg (the renderer/DNS/state logic) and
+# imageroot/bin (render-automx-conf, automx-ldap-lookup), against a fake
+# "agent"/"ldap" module -- see tests/unit/stub_agent.py -- since the real
+# ones only exist on an NS8 node or inside the automx-app container
+# (DESIGN.md 9.1). Modeled on ns8-dnshelper's test-helper.yml.
+
+on:
+  push:
+    paths:
+      - 'imageroot/pypkg/**'
+      - 'imageroot/bin/**'
+      - 'tests/unit/**'
+  pull_request:
+    paths:
+      - 'imageroot/pypkg/**'
+      - 'imageroot/bin/**'
+      - 'tests/unit/**'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python3 -m unittest discover -s tests/unit -v

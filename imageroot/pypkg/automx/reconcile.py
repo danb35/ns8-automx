@@ -18,7 +18,7 @@ import os
 import subprocess
 import sys
 
-from automx import mail, node, routes, state
+from automx import domains, mail, node, routes, state
 
 
 def reconcile(rdb):
@@ -34,11 +34,7 @@ def reconcile(rdb):
     except (mail.MailNotFound, mail.MailNotConfigured):
         mail_domain_names = set()
 
-    enabled_domains = sorted(
-        domain
-        for domain, flags in domains_state.items()
-        if flags.get("enabled") and domain in mail_domain_names
-    )
+    enabled_domains = domains.enabled_usable(mail_domain_names, domains_state)
 
     route_failures = {}
     for domain in enabled_domains:

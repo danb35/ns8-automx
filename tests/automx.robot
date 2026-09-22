@@ -15,7 +15,7 @@ Check if automx is installed correctly
 
 Check if automx can be configured
     ${rc} =    Execute Command
-    ...    api-cli run module/${module_id}/configure-module --data '{"host":"${TEST_HOST}","http2https":false,"lets_encrypt":false}'
+    ...    api-cli run module/${module_id}/configure-module --data '{"service_host":"${TEST_HOST}","http2https":false,"display_names":false}'
     ...    return_rc=True  return_stdout=False
     Should Be Equal As Integers    ${rc}  0
 
@@ -24,7 +24,34 @@ Check if automx configuration reads back
     ...    return_rc=True
     Should Be Equal As Integers    ${rc}  0
     ${config} =    Evaluate    json.loads('''${output}''')    modules=json
-    Should Be Equal    ${config}[host]    ${TEST_HOST}
+    Should Be Equal    ${config}[service_host]    ${TEST_HOST}
+    Should Be Equal    ${config}[http2https]    ${False}
+    Should Be Equal    ${config}[display_names]    ${False}
+    Should Be Equal As Integers    ${config}[enabled_domain_count]    0
+    # No mail module on this throwaway CI node (DESIGN.md 9.1); get-configuration
+    # must still degrade cleanly rather than fail the task.
+    Should Be Equal    ${config}[mail_hostname]    ${None}
+
+Check if get-domains tolerates a missing mail module
+    ${output}  ${rc} =    Execute Command    api-cli run module/${module_id}/get-domains --data '{}'
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}  0
+    ${result} =    Evaluate    json.loads('''${output}''')    modules=json
+    Should Be Equal    ${result}[domains]    ${{ [] }}
+
+Check if set-domains rejects a domain the mail module doesn't have
+    # No mail module is installed on this node, so any domain name is
+    # unknown -- confirms the action fails a specific, user-fixable
+    # validation rather than crashing (DESIGN.md 6.3).
+    ${output}  ${rc} =    Execute Command
+    ...    api-cli run module/${module_id}/set-domains --data '{"domains":{"example.test":{"enabled":true}}}'
+    ...    return_rc=True
+    Should Not Be Equal As Integers    ${rc}  0
+
+Check if automx service is healthy
+    ${output}  ${rc} =    Execute Command    api-cli run module/${module_id}/get-status --data '{}'
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}  0
 
 Check if automx is removed correctly
     ${rc} =    Execute Command    remove-module --no-preserve ${module_id}

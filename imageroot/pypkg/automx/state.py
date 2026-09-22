@@ -12,8 +12,18 @@ import json
 import os
 
 STATE_DIR = os.environ.get("AGENT_STATE_DIR", "state")
-DOMAINS_PATH = os.path.join(STATE_DIR, "domains.json")
-SETTINGS_PATH = os.path.join(STATE_DIR, "settings.json")
+
+
+def _domains_path():
+    # A function, not a module-level constant computed once from STATE_DIR:
+    # tests patch automx.state.STATE_DIR, which only works if the path is
+    # resolved fresh on every call.
+    return os.path.join(STATE_DIR, "domains.json")
+
+
+def _settings_path():
+    return os.path.join(STATE_DIR, "settings.json")
+
 
 # service_host: null means "use the node FQDN" (DESIGN.md 4.3/5.1).
 # http2https: default true (DESIGN.md 4.4).
@@ -43,20 +53,20 @@ def _atomic_write_json(path, obj):
 
 def load_domains():
     """{"<domain>": {"enabled": bool}}, empty if never written."""
-    return _load_json(DOMAINS_PATH, {})
+    return _load_json(_domains_path(), {})
 
 
 def save_domains(domains):
-    _atomic_write_json(DOMAINS_PATH, domains)
+    _atomic_write_json(_domains_path(), domains)
 
 
 def load_settings():
     settings = dict(DEFAULT_SETTINGS)
-    settings.update(_load_json(SETTINGS_PATH, {}))
+    settings.update(_load_json(_settings_path(), {}))
     return settings
 
 
 def save_settings(settings):
     merged = dict(DEFAULT_SETTINGS)
     merged.update(settings)
-    _atomic_write_json(SETTINGS_PATH, merged)
+    _atomic_write_json(_settings_path(), merged)

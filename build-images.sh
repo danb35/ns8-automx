@@ -47,6 +47,27 @@ automxappimage="${repobase}/automx-app"
 buildah build --tag "${automxappimage}" -f Containerfile .
 images+=("${automxappimage}")
 
+# Smoke-check the built image against a synthetic config (DESIGN.md 9.1:
+# "build image, run automx config validate and automx render
+# autoconfig|autodiscover|mobileconfig against rendered configs with a
+# synthetic address"). The fixture is the same shape render-automx-conf
+# itself produces; no state/ldap-lookup.json exists here, so this also
+# exercises automx-ldap-lookup's fallback path (DESIGN.md 3.3) on every
+# build, not just the render logic in isolation (tests/unit/ covers that).
+echo "Smoke-checking the automx-app image against a synthetic config..."
+smokecontainer=$(buildah from "${automxappimage}")
+smokeemail="dan@ci-smoke-test.invalid"
+buildah copy "${smokecontainer}" tests/fixtures/synthetic-automx.conf /etc/automx/automx.conf
+buildah run "${smokecontainer}" -- \
+    automx config validate --config /etc/automx/automx.conf --domain ci-smoke-test.invalid
+buildah run "${smokecontainer}" -- \
+    automx render autoconfig --config /etc/automx/automx.conf --email "${smokeemail}" >/dev/null
+buildah run "${smokecontainer}" -- \
+    automx render autodiscover --config /etc/automx/automx.conf --email "${smokeemail}" --schema outlook >/dev/null
+buildah run "${smokecontainer}" -- \
+    automx render mobileconfig --config /etc/automx/automx.conf --email "${smokeemail}" >/dev/null
+buildah rm "${smokecontainer}" >/dev/null
+
 buildah config --entrypoint=/ \
     --label="org.nethserver.authorizations=traefik@node:routeadm node:reader cluster:accountconsumer dnshelper@cluster:dnswriter mail@any:mailadm" \
     --label="org.nethserver.tcp-ports-demand=1" \

@@ -37,7 +37,7 @@ import agent
 from agent.ldapproxy import Ldapproxy
 
 sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
-from automx import mail, node as automx_node, state  # noqa: E402
+from automx import domains, mail, node as automx_node, state  # noqa: E402
 
 # The container reaches the host's ldapproxy loopback listener at this
 # address, not 127.0.0.1, because automx.service runs with
@@ -78,11 +78,7 @@ def main():
     # mail is dropped from generated config, the stored flag is kept
     # (DESIGN.md 4.2, orphan handling belongs to get-domains/set-domains,
     # not to this renderer).
-    enabled_domains = sorted(
-        domain
-        for domain, flags in domains_state.items()
-        if flags.get("enabled") and domain in mail_domain_names
-    )
+    enabled_domains = domains.enabled_usable(mail_domain_names, domains_state)
 
     if not enabled_domains:
         # Not a warning: zero enabled/usable domains is an expected state
