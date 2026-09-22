@@ -52,6 +52,7 @@ def build(
     get_route_result=None,
     ldap_domain=None,
     hidden_users_filter="",
+    bound_domain_list=None,
 ):
     """A fresh fake agent module. Pass tasks_run(agent_id, action, data) to
     control agent.tasks.run()'s response; everything else has a reasonable
@@ -90,6 +91,13 @@ def build(
     agent.get_route = mock.Mock(return_value=get_route_result if get_route_result is not None else {})
 
     agent.bind_user_domains = mock.Mock()
+    # Real signature confirmed against ns8-core (2026-09-22): reads the
+    # current binding straight from Redis, no task call, no event -- render-
+    # automx-conf uses this to skip a redundant bind_user_domains() call,
+    # which otherwise re-fires module-domain-changed unconditionally.
+    agent.get_bound_domain_list = mock.Mock(
+        return_value=bound_domain_list if bound_domain_list is not None else []
+    )
 
     helper_result = mock.Mock()
     helper_result.check_returncode = mock.Mock()

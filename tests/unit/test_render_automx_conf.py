@@ -249,6 +249,62 @@ class MainOrchestrationTests(unittest.TestCase):
                 mock.patch.object(render.mail, "agent", agent):
             self.run_main_expecting_exit(render.EXIT_NOTHING_TO_RENDER)
 
+    def _agent_for_successful_render(self, **kwargs):
+        return stub_agent.build(
+            list_service_providers_result=[{"module_id": "mail1"}],
+            tasks_run=lambda agent_id, action, data, **kw: {
+                "get-configuration": {
+                    "exit_code": 0,
+                    "output": {"hostname": "mail.example.com", "user_domain": {"name": "ad.example.com"}},
+                },
+                "list-domains": {"exit_code": 0, "output": [{"domain": "example.com"}]},
+                "get-fqdn": {"exit_code": 0, "output": {"hostname": "node", "domain": "example.net"}},
+            }[action],
+            resolve_agent_id_result="node/1",
+            ldap_domain={
+                "host": "127.0.0.1", "port": 3890, "bind_dn": "x",
+                "bind_password": "x", "base_dn": "x", "schema": "ad",
+            },
+            **kwargs,
+        )
+
+    def test_bind_user_domains_skipped_when_already_bound(self):
+        # Real-node finding, 2026-09-22: bind_user_domains() unconditionally
+        # re-fires module-domain-changed, and render-automx-conf runs on
+        # every service start/reconcile -- calling it every time created a
+        # self-sustaining event loop (our own module-domain-changed handler
+        # calls reconcile(), which renders again, which re-binds again).
+        # get_bound_domain_list() must be consulted first and the call
+        # skipped when the binding hasn't actually changed.
+        render.state.save_domains({"example.com": {"enabled": True}})
+        agent = self._agent_for_successful_render(bound_domain_list=["ad.example.com"])
+        with mock.patch.object(render, "agent", agent), \
+                mock.patch.object(render.mail, "agent", agent), \
+                mock.patch.object(render.automx_node, "agent", agent):
+            render.main()
+
+        agent.bind_user_domains.assert_not_called()
+
+    def test_bind_user_domains_called_when_not_yet_bound(self):
+        render.state.save_domains({"example.com": {"enabled": True}})
+        agent = self._agent_for_successful_render(bound_domain_list=[])
+        with mock.patch.object(render, "agent", agent), \
+                mock.patch.object(render.mail, "agent", agent), \
+                mock.patch.object(render.automx_node, "agent", agent):
+            render.main()
+
+        agent.bind_user_domains.assert_called_once_with(["ad.example.com"])
+
+    def test_bind_user_domains_called_when_binding_differs(self):
+        render.state.save_domains({"example.com": {"enabled": True}})
+        agent = self._agent_for_successful_render(bound_domain_list=["some-other.example.com"])
+        with mock.patch.object(render, "agent", agent), \
+                mock.patch.object(render.mail, "agent", agent), \
+                mock.patch.object(render.automx_node, "agent", agent):
+            render.main()
+
+        agent.bind_user_domains.assert_called_once_with(["ad.example.com"])
+
 
 if __name__ == "__main__":
     unittest.main()

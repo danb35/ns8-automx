@@ -99,7 +99,24 @@ def main():
 
     service_host = settings.get("service_host") or automx_node.get_node_fqdn()
 
-    agent.bind_user_domains([user_domain])
+    # Real-node finding (2026-09-22): agent.bind_user_domains() unconditionally
+    # calls the cluster's bind-user-domains action ("the previous list is
+    # discarded", per its own docstring) -- it does not skip the call or the
+    # resulting module-domain-changed event when the binding is already
+    # exactly this. render-automx-conf runs on every automx.service start
+    # (ExecStartPre) and every reconcile() call, so calling it unconditionally
+    # here re-fired module-domain-changed on every single render; our own
+    # module-domain-changed handler calls reconcile(), which renders again,
+    # which re-binds again -- a self-sustaining loop with no other trigger
+    # needed, confirmed live via journalctl showing "Handler of
+    # cluster/event/module-domain-changed is starting" on a ~45-50s cadence
+    # indefinitely (matching one full render+validate+restart cycle's
+    # duration) and even "Agent is busy... rejected!" once re-entry outpaced
+    # a still-running cycle. get_bound_domain_list() reads the current
+    # binding directly from Redis with no task call and no event -- only
+    # rebind when it's actually different.
+    if agent.get_bound_domain_list(rdb) != [user_domain]:
+        agent.bind_user_domains([user_domain])
     ldap_domain = Ldapproxy().get_domain(user_domain)
     agent.assert_exp(ldap_domain is not None, f"user domain {user_domain} is not available")
 
