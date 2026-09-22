@@ -228,7 +228,7 @@ class MainOrchestrationTests(unittest.TestCase):
         agent = stub_agent.build(list_service_providers_result=[])
         with mock.patch.object(render, "agent", agent), \
                 mock.patch.object(render.mail, "agent", agent):
-            self.run_main_expecting_exit(1)
+            self.run_main_expecting_exit(render.EXIT_NOTHING_TO_RENDER)
 
         self.assertFalse(os.path.exists(conf_path))
         self.assertFalse(os.path.exists(lookup_path))
@@ -247,7 +247,7 @@ class MainOrchestrationTests(unittest.TestCase):
         )
         with mock.patch.object(render, "agent", agent), \
                 mock.patch.object(render.mail, "agent", agent):
-            self.run_main_expecting_exit(1)
+            self.run_main_expecting_exit(render.EXIT_NOTHING_TO_RENDER)
 
 
 if __name__ == "__main__":

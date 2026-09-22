@@ -44,6 +44,13 @@ from automx import domains, mail, node as automx_node, state  # noqa: E402
 # --network=slirp4netns:allow_host_loopback=true (DESIGN.md 3.3/4.1).
 CONTAINER_HOST_LOOPBACK = "10.0.2.2"
 
+# Distinct from an unhandled exception's default exit(1) (real-node finding,
+# 2026-09-22): reload-automx must be able to tell "nothing to render, this
+# is expected" (DESIGN.md 4.3, e.g. zero enabled domains) apart from "this
+# script crashed" -- both used to exit 1, so a crash was silently treated
+# as the former and the service got stopped with no clear error surfaced.
+EXIT_NOTHING_TO_RENDER = 2
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -68,11 +75,11 @@ def main():
     except mail.MailNotFound:
         print(agent.SD_WARNING + "no mail module instance found, nothing to render", file=sys.stderr)
         clear_rendered_state(automx_conf_path, ldap_lookup_path)
-        sys.exit(1)
+        sys.exit(EXIT_NOTHING_TO_RENDER)
     except mail.MailNotConfigured:
         print(agent.SD_WARNING + "mail module is not fully configured yet, nothing to render", file=sys.stderr)
         clear_rendered_state(automx_conf_path, ldap_lookup_path)
-        sys.exit(1)
+        sys.exit(EXIT_NOTHING_TO_RENDER)
 
     # Enabled AND still present in the mail module -- a domain removed from
     # mail is dropped from generated config, the stored flag is kept
@@ -88,7 +95,7 @@ def main():
         # the start; reload-automx, seeing the same zero count, is expected
         # to call `systemctl --user stop` itself.
         clear_rendered_state(automx_conf_path, ldap_lookup_path)
-        sys.exit(1)
+        sys.exit(EXIT_NOTHING_TO_RENDER)
 
     service_host = settings.get("service_host") or automx_node.get_node_fqdn()
 
@@ -96,7 +103,10 @@ def main():
     ldap_domain = Ldapproxy().get_domain(user_domain)
     agent.assert_exp(ldap_domain is not None, f"user domain {user_domain} is not available")
 
-    hidden_users_filter = Ldapproxy().get_ldap_users_search_filter_clause()
+    # Real-node finding (2026-09-22): takes the user domain name (it does
+    # its own internal get_domain(domain) lookup) -- not argument-less as
+    # DESIGN.md 3.3 assumed.
+    hidden_users_filter = Ldapproxy().get_ldap_users_search_filter_clause(user_domain)
 
     write_ldap_lookup(ldap_lookup_path, ldap_domain, hidden_users_filter)
     write_automx_conf(

@@ -37,15 +37,33 @@ def run_render():
 
 
 def run_validate(staged_conf_path, domain):
+    # No leading "automx": the image's ENTRYPOINT is ["tini", "--",
+    # "automx"], and `podman run <image> <args>` appends args to that
+    # entrypoint rather than replacing it (unlike `buildah run`, which the
+    # build-time smoke check in build-images.sh uses and which bypasses the
+    # entrypoint entirely) -- a leading "automx" here would run "automx
+    # automx config validate ...", found by exercising this for real.
+    #
+    # --userns=keep-id --user <our own uid:gid>: without it, the container
+    # runs as the image's baked-in UID 10001, which rootless podman's
+    # default user namespace maps to a subordinate host UID unrelated to
+    # this module's own -- automx then can't read the staged file (0640,
+    # owned by this module's host user). Same fix DESIGN.md 4.1 already
+    # calls for in automx.service's real ExecStart; missed here for this
+    # ephemeral validate container until exercised on a real node.
+    uid = os.getuid()
+    gid = os.getgid()
     return subprocess.run(
         [
             "podman",
             "run",
             "--rm",
+            "--userns=keep-id",
+            "--user",
+            f"{uid}:{gid}",
             "--volume",
             f"{staged_conf_path}:/etc/automx/automx.conf:ro,Z",
             os.environ["AUTOMX_APP_IMAGE"],
-            "automx",
             "config",
             "validate",
             "--config",
@@ -78,7 +96,7 @@ def stop_and_clear():
 def main():
     render = run_render()
 
-    if render.returncode == 1:
+    if render.returncode == 2:  # EXIT_NOTHING_TO_RENDER in render-automx-conf
         # Nothing to render (no domains enabled/usable, or mail isn't
         # configured yet) -- a valid state, not a failure (DESIGN.md 4.3).
         stop_and_clear()
@@ -87,6 +105,11 @@ def main():
         return 0
 
     if render.returncode != 0:
+        # Anything else, including an unhandled exception's default
+        # exit(1), is a real failure -- distinct from the exit(2) above
+        # since the two used to share exit(1) and a crash was silently
+        # (mis)treated as "nothing to render" (found on a real node,
+        # 2026-09-22).
         print(agent.SD_ERR + "render-automx-conf failed:\n" + render.stderr, file=sys.stderr)
         return 1
 

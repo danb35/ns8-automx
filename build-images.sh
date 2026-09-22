@@ -56,10 +56,10 @@ images+=("${automxappimage}")
 # build, not just the render logic in isolation (tests/unit/ covers that).
 echo "Smoke-checking the automx-app image against a synthetic config..."
 smokecontainer=$(buildah from "${automxappimage}")
-smokeemail="dan@ci-smoke-test.invalid"
+smokeemail="dan@ci-smoke-test.test"
 buildah copy "${smokecontainer}" tests/fixtures/synthetic-automx.conf /etc/automx/automx.conf
 buildah run "${smokecontainer}" -- \
-    automx config validate --config /etc/automx/automx.conf --domain ci-smoke-test.invalid
+    automx config validate --config /etc/automx/automx.conf --domain ci-smoke-test.test
 buildah run "${smokecontainer}" -- \
     automx render autoconfig --config /etc/automx/automx.conf --email "${smokeemail}" >/dev/null
 buildah run "${smokecontainer}" -- \

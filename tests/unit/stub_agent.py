@@ -35,8 +35,11 @@ class LdapproxyStub:
         type(self).calls.append(("get_domain", name))
         return type(self).get_domain_result
 
-    def get_ldap_users_search_filter_clause(self):
-        type(self).calls.append(("get_ldap_users_search_filter_clause",))
+    def get_ldap_users_search_filter_clause(self, domain):
+        # Real signature confirmed on a live node (2026-09-22): takes the
+        # domain name (it does its own internal get_domain(domain) lookup),
+        # not argument-less as first assumed.
+        type(self).calls.append(("get_ldap_users_search_filter_clause", domain))
         return type(self).filter_clause
 
 
