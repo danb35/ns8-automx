@@ -5,6 +5,7 @@
 import Vue from "vue";
 import VueRouter from "vue-router";
 import Status from "../views/Status.vue";
+import Domains from "../views/Domains.vue";
 import Settings from "../views/Settings.vue";
 
 Vue.use(VueRouter);
@@ -15,6 +16,11 @@ const routes = [
     name: "Status",
     component: Status,
     alias: "/status", // important
+  },
+  {
+    path: "/domains",
+    name: "Domains",
+    component: Domains,
   },
   {
     path: "/settings",

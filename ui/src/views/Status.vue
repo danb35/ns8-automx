@@ -1,5 +1,5 @@
 <!--
-  Copyright (C) 2023 Nethesis S.r.l.
+  Copyright (C) 2026 Dan Brown
   SPDX-License-Identifier: GPL-3.0-or-later
 -->
 <template>
@@ -19,22 +19,12 @@
         />
       </cv-column>
     </cv-row>
-    <cv-row v-if="error.listBackupRepositories">
+    <cv-row v-if="error.getConfiguration">
       <cv-column>
         <NsInlineNotification
           kind="error"
-          :title="$t('action.list-backup-repositories')"
-          :description="error.listBackupRepositories"
-          :showCloseButton="false"
-        />
-      </cv-column>
-    </cv-row>
-    <cv-row v-if="error.listBackups">
-      <cv-column>
-        <NsInlineNotification
-          kind="error"
-          :title="$t('action.list-backups')"
-          :description="error.listBackups"
+          :title="$t('action.get-configuration')"
+          :description="error.getConfiguration"
           :showCloseButton="false"
         />
       </cv-column>
@@ -43,33 +33,20 @@
       <cv-column :md="4" :max="4">
         <NsInfoCard
           light
-          :title="$t('status.automx_webapp')"
-          :description="this.host ? this.host : $t('status.not_configured')"
-          :icon="Wikis32"
+          :title="'' + config.enabled_domain_count"
+          :description="$tc('status.enabled_domains', config.enabled_domain_count)"
+          :icon="Email32"
           :loading="loading.getConfiguration"
-          :isErrorShown="error.getConfiguration"
-          :errorTitle="$t('error.cannot_retrieve_configuration')"
-          :errorDescription="error.getConfiguration"
           class="min-height-card"
         >
           <template slot="content">
             <NsButton
-              v-if="this.host"
               kind="ghost"
-              :icon="Launch20"
-              :disabled="loading.getConfiguration"
-              @click="goToWebapp"
-            >
-              {{ $t("status.open_webapp") }}
-            </NsButton>
-            <NsButton
-              v-else
-              kind="ghost"
-              :disabled="loading.getConfiguration"
               :icon="ArrowRight20"
-              @click="goToAppPage(instanceName, 'settings')"
+              :disabled="loading.getConfiguration"
+              @click="goToAppPage(instanceName, 'domains')"
             >
-              {{ $t("status.configure") }}
+              {{ $t("status.manage_domains") }}
             </NsButton>
           </template>
         </NsInfoCard>
@@ -77,10 +54,34 @@
       <cv-column :md="4" :max="4">
         <NsInfoCard
           light
-          :title="status.instance || '-'"
-          :description="$t('status.app_instance')"
-          :icon="Application32"
-          :loading="loading.getStatus || loading.getConfiguration"
+          :title="config.mail_hostname || '-'"
+          :description="$t('status.mail_hostname')"
+          :icon="Email32"
+          :loading="loading.getConfiguration"
+          class="min-height-card"
+        />
+      </cv-column>
+      <cv-column :md="4" :max="4">
+        <NsInfoCard
+          light
+          :title="config.user_domain || '-'"
+          :description="$t('status.user_domain')"
+          :icon="User32"
+          :loading="loading.getConfiguration"
+          class="min-height-card"
+        />
+      </cv-column>
+      <cv-column :md="4" :max="4">
+        <NsInfoCard
+          light
+          :title="
+            config.dnshelper_present
+              ? $t('status.dnshelper_present')
+              : $t('status.dnshelper_absent')
+          "
+          :description="$t('status.dnshelper')"
+          :icon="DataBase32"
+          :loading="loading.getConfiguration"
           class="min-height-card"
         />
       </cv-column>
@@ -91,7 +92,7 @@
           :titleTooltip="installationNodeTitleTooltip"
           :description="$t('status.installation_node')"
           :icon="Chip32"
-          :loading="loading.getStatus || loading.getConfiguration"
+          :loading="loading.getStatus"
           class="min-height-card"
         />
       </cv-column>
@@ -286,20 +287,20 @@
 </template>
 
 <script>
-import to from "await-to-js";
 import { mapState } from "vuex";
 import {
   QueryParamService,
-  TaskService,
   IconService,
   UtilService,
   PageTitleService,
 } from "@nethserver/ns8-ui-lib";
+import to from "await-to-js";
+import AutomxService from "../mixins/automx";
 
 export default {
   name: "Status",
   mixins: [
-    TaskService,
+    AutomxService,
     QueryParamService,
     IconService,
     UtilService,
@@ -314,9 +315,12 @@ export default {
         page: "status",
       },
       urlCheckInterval: null,
-      isRedirectChecked: false,
-      redirectTimeout: 0,
-      host: "",
+      config: {
+        enabled_domain_count: 0,
+        mail_hostname: null,
+        user_domain: null,
+        dnshelper_present: false,
+      },
       status: {
         instance: "",
         services: [],
@@ -335,6 +339,7 @@ export default {
         getStatus: "",
         listBackupRepositories: "",
         listBackups: "",
+        getConfiguration: "",
       },
     };
   },
@@ -369,115 +374,30 @@ export default {
     clearInterval(this.urlCheckInterval);
     next();
   },
-  mounted() {
-    this.redirectTimeout = setTimeout(
-      () => (this.isRedirectChecked = true),
-      200
-    );
-  },
-  beforeUnmount() {
-    clearTimeout(this.redirectTimeout);
-  },
   created() {
     this.getConfiguration();
     this.getStatus();
     this.listBackupRepositories();
   },
   methods: {
-    goToWebapp() {
-      window.open(`https://${this.host}`, "_blank");
-    },
     async getConfiguration() {
       this.loading.getConfiguration = true;
       this.error.getConfiguration = "";
-      const taskAction = "get-configuration";
-      const eventId = this.getUuid();
-
-      // register to task error
-      this.core.$root.$once(
-        `${taskAction}-aborted-${eventId}`,
-        this.getConfigurationAborted
-      );
-
-      // register to task completion
-      this.core.$root.$once(
-        `${taskAction}-completed-${eventId}`,
-        this.getConfigurationCompleted
-      );
-
-      const res = await to(
-        this.createModuleTaskForApp(this.instanceName, {
-          action: taskAction,
-          extra: {
-            title: this.$t("action." + taskAction),
-            isNotificationHidden: true,
-            eventId,
-          },
-        })
-      );
-      const err = res[0];
-
-      if (err) {
-        console.error(`error creating task ${taskAction}`, err);
-        this.error.getConfiguration = this.getErrorMessage(err);
-        this.loading.getConfiguration = false;
-        return;
+      try {
+        this.config = await this.callAction("get-configuration");
+      } catch (err) {
+        this.error.getConfiguration = this.errorText(err);
       }
-    },
-    getConfigurationAborted(taskResult, taskContext) {
-      console.error(`${taskContext.action} aborted`, taskResult);
-      this.error.getConfiguration = this.$t("error.generic_error");
-      this.loading.getConfiguration = false;
-    },
-    getConfigurationCompleted(taskContext, taskResult) {
-      const config = taskResult.output;
-      this.host = config.host;
       this.loading.getConfiguration = false;
     },
     async getStatus() {
       this.loading.getStatus = true;
       this.error.getStatus = "";
-      const taskAction = "get-status";
-      const eventId = this.getUuid();
-
-      // register to task error
-      this.core.$root.$once(
-        `${taskAction}-aborted-${eventId}`,
-        this.getStatusAborted
-      );
-
-      // register to task completion
-      this.core.$root.$once(
-        `${taskAction}-completed-${eventId}`,
-        this.getStatusCompleted
-      );
-
-      const res = await to(
-        this.createModuleTaskForApp(this.instanceName, {
-          action: taskAction,
-          extra: {
-            title: this.$t("action." + taskAction),
-            isNotificationHidden: true,
-            eventId,
-          },
-        })
-      );
-      const err = res[0];
-
-      if (err) {
-        console.error(`error creating task ${taskAction}`, err);
-        this.error.getStatus = this.getErrorMessage(err);
-        this.loading.getStatus = false;
-        return;
+      try {
+        this.status = await this.callAction("get-status");
+      } catch (err) {
+        this.error.getStatus = this.errorText(err);
       }
-    },
-    getStatusAborted(taskResult, taskContext) {
-      console.error(`${taskContext.action} aborted`, taskResult);
-      this.error.getStatus = this.$t("error.generic_error");
-      this.loading.getStatus = false;
-    },
-    getStatusCompleted(taskContext, taskResult) {
-      this.status = taskResult.output;
       this.loading.getStatus = false;
     },
     async listBackupRepositories() {
@@ -486,19 +406,16 @@ export default {
       const taskAction = "list-backup-repositories";
       const eventId = this.getUuid();
 
-      // register to task error
       this.core.$root.$once(
         `${taskAction}-aborted-${eventId}`,
         this.listBackupRepositoriesAborted
       );
-
-      // register to task completion
       this.core.$root.$once(
         `${taskAction}-completed-${eventId}`,
         this.listBackupRepositoriesCompleted
       );
 
-      const res = await to(
+      const [err] = await to(
         this.createClusterTaskForApp({
           action: taskAction,
           extra: {
@@ -508,13 +425,10 @@ export default {
           },
         })
       );
-      const err = res[0];
-
       if (err) {
         console.error(`error creating task ${taskAction}`, err);
         this.error.listBackupRepositories = this.getErrorMessage(err);
         this.loading.listBackupRepositories = false;
-        return;
       }
     },
     listBackupRepositoriesAborted(taskResult, taskContext) {
@@ -536,19 +450,16 @@ export default {
       const taskAction = "list-backups";
       const eventId = this.getUuid();
 
-      // register to task error
       this.core.$root.$once(
         `${taskAction}-aborted-${eventId}`,
         this.listBackupsAborted
       );
-
-      // register to task completion
       this.core.$root.$once(
         `${taskAction}-completed-${eventId}`,
         this.listBackupsCompleted
       );
 
-      const res = await to(
+      const [err] = await to(
         this.createClusterTaskForApp({
           action: taskAction,
           extra: {
@@ -558,13 +469,10 @@ export default {
           },
         })
       );
-      const err = res[0];
-
       if (err) {
         console.error(`error creating task ${taskAction}`, err);
         this.error.listBackups = this.getErrorMessage(err);
         this.loading.listBackups = false;
-        return;
       }
     },
     listBackupsAborted(taskResult, taskContext) {
@@ -576,12 +484,10 @@ export default {
       let backups = taskResult.output.backups;
       backups.sort(this.sortByProperty("name"));
 
-      // get repository name
       for (const backup of backups) {
         const repo = this.backupRepositories.find(
           (r) => r.id == backup.repository
         );
-
         if (repo) {
           backup.repoName = repo.name;
         }
