@@ -33,6 +33,15 @@ EnvironmentFile=-%S/state/environment
 WorkingDirectory=%S/state
 Restart=always
 TimeoutStopSec=70
+# `podman stop` sends SIGTERM to conmon, which then exits 143 (128+SIGTERM)
+# -- systemd's default SuccessExitStatus is just 0, so without this a
+# perfectly normal `systemctl --user stop` (e.g. reload-automx's
+# stop_and_clear() when zero domains are enabled, DESIGN.md 4.3) is
+# recorded as "failed", which get-status then surfaces to the admin UI as
+# a false failure for expected behavior. Found on a real node, 2026-09-22,
+# by disabling the only enabled domain and checking get-status afterward.
+# 137 covers the TimeoutStopSec escalation to SIGKILL.
+SuccessExitStatus=143 137
 ExecStartPre=/bin/rm -f %t/automx.pid %t/automx.ctr-id
 # Regenerate automx.conf and the lookup helper's connection file from
 # current module state before every start (DESIGN.md 4.2: "regenerated on
