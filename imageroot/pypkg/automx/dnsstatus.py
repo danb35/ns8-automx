@@ -87,8 +87,25 @@ def _resolver_check(expected):
                 "podman",
                 "run",
                 "--rm",
-                os.environ["AUTOMX_APP_IMAGE"],
+                # --interactive: subprocess.run's `input=` writes to the
+                # child's stdin pipe, but plain `podman run` (no -i) doesn't
+                # attach the container's stdin to it at all -- without this,
+                # automx-dns-check sees an empty stdin and fails to parse it
+                # as JSON. Found on a real node, 2026-09-22, right after the
+                # --entrypoint fix below: fixing one revealed the other, both
+                # previously masked by the same "unknown status" fallback.
+                "--interactive",
+                # --entrypoint: the image's own ENTRYPOINT is ["tini", "--",
+                # "automx"], and plain `podman run <image> <args>` appends
+                # args to that rather than replacing it (same bug class
+                # found in reload-automx's run_validate() -- see DESIGN.md
+                # 9). Without this override the command actually run is
+                # "automx automx-dns-check", an invalid automx subcommand,
+                # which exits nonzero and makes every record status
+                # "unknown" -- found on a real node, 2026-09-22.
+                "--entrypoint",
                 "automx-dns-check",
+                os.environ["AUTOMX_APP_IMAGE"],
             ],
             input=json.dumps(expected),
             capture_output=True,
