@@ -17,14 +17,28 @@ def expected_records(domain, target_fqdn):
     """The three records DESIGN.md 5.1 wants for one enabled domain, as
     absolute {"host", "type", "value"} dicts (not zone-relative -- that
     depends on which zone a specific provider manages, see
-    dnshelper_relative_name below)."""
+    dnshelper_relative_name below).
+
+    The CNAME/SRV target itself is given a trailing dot. Found on a real
+    node, 2026-09-22: dnshelper does not append one on our behalf (it
+    hands the RDATA to the provider largely as given -- see its
+    records.go toLibdns()/libdns.RR.Parse()), and a target without one is
+    standard-DNS *relative to the zone being written*, not absolute --
+    writing target_fqdn bare through a real RFC 2136 (BIND) provider
+    produced a CNAME literally pointing at
+    "<target_fqdn>.<domain>." instead of "<target_fqdn>.", confirmed via
+    dig against the zone afterward. automx-dns-check's own resolver-based
+    comparison (5.4) already strips trailing dots on both sides before
+    comparing, so it was never affected by this; only the create/
+    overwrite path through dnshelper actually wrote wrong data."""
+    target = target_fqdn.rstrip(".") + "."
     return [
-        {"host": f"autoconfig.{domain}", "type": "CNAME", "value": target_fqdn},
-        {"host": f"autodiscover.{domain}", "type": "CNAME", "value": target_fqdn},
+        {"host": f"autoconfig.{domain}", "type": "CNAME", "value": target},
+        {"host": f"autodiscover.{domain}", "type": "CNAME", "value": target},
         {
             "host": f"_autodiscover._tcp.{domain}",
             "type": "SRV",
-            "value": f"0 0 443 {target_fqdn}",
+            "value": f"0 0 443 {target}",
         },
     ]
 

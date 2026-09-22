@@ -56,21 +56,37 @@ def apply_changes(target, zone, changes, dry_run):
     """Executes plan_changes()'s output in the required order (delete
     conflicting types before appending a CNAME over them) and returns
     {"delete": response|None, "append": response|None, "set": response|None}.
-    Note: with dry_run=True, each call previews against the zone as it
-    actually is right now, independently -- a delete's dry-run preview does
-    not "apply" for the append dry-run call that follows, so a type-conflict
-    preview may look more alarming than the real (sequential, non-dry-run)
-    execution will be. This is a dnshelper limitation of previewing
-    multi-step changes as separate calls, not a bug here."""
+
+    dry_run's append call is skipped, not previewed through dnshelper, when
+    changes["delete"] is non-empty (real-node finding, 2026-09-22): each
+    dnshelper dry-run call previews against the zone exactly as it is right
+    now, independently of any other call in the same request, so an
+    append-records dry-run for a CNAME that's only valid *after* the paired
+    delete has actually happened always comes back rejected with a
+    "conflict" error -- confirmed live (append-records dry_run=true for a
+    CNAME over an existing A record: HTTP-level validation-failed, not a
+    softer "would conflict" preview) -- not just a more alarming-looking
+    preview as first assumed. plan_changes() already computed exactly what
+    that append would add, so the dry-run preview is synthesized from that
+    directly instead of asking dnshelper to validate something it
+    structurally cannot see. The delete itself IS still dry-run through
+    dnshelper, since it doesn't depend on anything else."""
     responses = {"delete": None, "append": None, "set": None}
     if changes["delete"]:
         responses["delete"] = dnshelperclient.delete_records(
             target, zone, changes["delete"], dry_run=dry_run
         )
     if changes["append"]:
-        responses["append"] = dnshelperclient.append_records(
-            target, zone, changes["append"], dry_run=dry_run
-        )
+        if dry_run and changes["delete"]:
+            responses["append"] = {
+                "dry_run": True,
+                "changes": {"add": list(changes["append"]), "remove": []},
+                "records": [],
+            }
+        else:
+            responses["append"] = dnshelperclient.append_records(
+                target, zone, changes["append"], dry_run=dry_run
+            )
     if changes["set"]:
         responses["set"] = dnshelperclient.set_records(
             target, zone, changes["set"], dry_run=dry_run, mode="rrset"

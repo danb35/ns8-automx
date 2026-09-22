@@ -26,8 +26,15 @@ class ExpectedRecordsTests(unittest.TestCase):
             ],
         )
         srv = records[2]
-        self.assertEqual(srv["value"], "0 0 443 node.example.net")
-        self.assertEqual(records[0]["value"], "node.example.net")
+        # Trailing dot: a target without one is zone-relative in standard
+        # DNS, and dnshelper doesn't add one for us (found on a real node,
+        # 2026-09-22 -- see expected_records()'s docstring).
+        self.assertEqual(srv["value"], "0 0 443 node.example.net.")
+        self.assertEqual(records[0]["value"], "node.example.net.")
+
+    def test_target_fqdn_with_a_trailing_dot_already_is_not_doubled(self):
+        records = dns.expected_records("example.com", "node.example.net.")
+        self.assertEqual(records[0]["value"], "node.example.net.")
 
 
 class RelativeNameTests(unittest.TestCase):

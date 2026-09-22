@@ -48,16 +48,25 @@ def _call(target, action, data):
     if response["exit_code"] == 0:
         return response["output"]
 
-    error = response.get("error")
-    # dnshelper's own action dumps [{"field", "parameter", "value", "error",
-    # "message"}] on a validation-failed exit -- but be defensive about the
-    # exact shape tasks.run hands back, since that's not independently
-    # confirmed here, only dnshelper's own stdout contract is.
+    # Real-node finding (2026-09-22): on a validation-failed exit, dnshelper's
+    # own structured [{"field", "parameter", "value", "error", "message"}]
+    # list (its documented contract) comes back as response["output"], not
+    # response["error"] -- that field instead holds dnshelper's raw audit
+    # log line (e.g. `<6>dnshelper audit: ... error="conflict" ...`), an
+    # unstructured string. Every call site that had exercised an error path
+    # before this (has-zone's managed/allowed flags) got there through a
+    # *successful* (exit_code 0) call, so this was never hit until a real
+    # append-records conflict did. Confirmed via the raw task record in
+    # Redis (task/module/<dnshelper>/<task id>/{output,error,exit_code}).
+    error = response.get("output")
     if isinstance(error, list) and error:
         error = error[0]
     if isinstance(error, dict):
         raise DnshelperError(error.get("error", "unknown"), error.get("message", ""))
-    raise DnshelperError("unknown", str(error) if error else "dnshelper call failed")
+    # No structured output (provider outage/timeout, DESIGN.md 3.5): fall
+    # back to whatever response["error"] has, for a message at least.
+    fallback = response.get("error")
+    raise DnshelperError("unknown", str(fallback) if fallback else "dnshelper call failed")
 
 
 def has_zone(target, name):

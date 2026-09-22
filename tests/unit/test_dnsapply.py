@@ -25,6 +25,10 @@ with mock.patch.dict(sys.modules, {"agent": _agent, "agent.ldapproxy": _agent.ld
 
 ZONE = "example.com"
 TARGET = "node.example.net"
+# expected_records() appends a trailing dot to the target (2026-09-22 fix,
+# see dns.py) -- dnshelper's own get-records returns written CNAME/SRV
+# targets the same way, so "existing" fixtures below use this form too.
+TARGET_ABSOLUTE = TARGET + "."
 
 
 def expected():
@@ -43,9 +47,9 @@ class CreateTests(unittest.TestCase):
 
     def test_ok_records_are_untouched(self):
         existing = [
-            {"name": "autoconfig.mail", "type": "CNAME", "ttl": 3600, "data": TARGET},
-            {"name": "autodiscover.mail", "type": "CNAME", "ttl": 3600, "data": TARGET},
-            {"name": "_autodiscover._tcp.mail", "type": "SRV", "ttl": 3600, "data": f"0 0 443 {TARGET}"},
+            {"name": "autoconfig.mail", "type": "CNAME", "ttl": 3600, "data": TARGET_ABSOLUTE},
+            {"name": "autodiscover.mail", "type": "CNAME", "ttl": 3600, "data": TARGET_ABSOLUTE},
+            {"name": "_autodiscover._tcp.mail", "type": "SRV", "ttl": 3600, "data": f"0 0 443 {TARGET_ABSOLUTE}"},
         ]
         changes = dnsapply.plan_changes(ZONE, expected(), existing, "create")
         self.assertEqual(changes, {"delete": [], "append": [], "set": []})
@@ -69,7 +73,7 @@ class OverwriteTests(unittest.TestCase):
         self.assertEqual(changes["delete"], [])
         self.assertEqual(changes["append"], [])
         self.assertEqual(len(changes["set"]), 1)
-        self.assertEqual(changes["set"][0], {"name": "autoconfig.mail", "type": "CNAME", "data": TARGET})
+        self.assertEqual(changes["set"][0], {"name": "autoconfig.mail", "type": "CNAME", "data": TARGET_ABSOLUTE})
 
     def test_type_conflict_deletes_then_appends_the_cname(self):
         # DESIGN.md 5.3.4: a type conflict needs delete-records naming name
@@ -85,7 +89,7 @@ class OverwriteTests(unittest.TestCase):
             sorted((r["name"], r["type"]) for r in changes["delete"]),
             [("autoconfig.mail", "A"), ("autoconfig.mail", "TXT")],
         )
-        self.assertEqual(changes["append"], [{"name": "autoconfig.mail", "type": "CNAME", "data": TARGET}])
+        self.assertEqual(changes["append"], [{"name": "autoconfig.mail", "type": "CNAME", "data": TARGET_ABSOLUTE}])
 
     def test_srv_conflict_replaces_the_whole_rrset_via_set(self):
         srv = expected()[2]
@@ -100,6 +104,63 @@ class OverwriteTests(unittest.TestCase):
     def test_overwrite_still_appends_missing_records(self):
         changes = dnsapply.plan_changes(ZONE, expected(), [], "overwrite")
         self.assertEqual(len(changes["append"]), 3)
+
+
+class ApplyChangesTests(unittest.TestCase):
+    """Real-node finding, 2026-09-22: a dnshelper dry-run call previews
+    against the zone exactly as it is right now -- so a dry-run
+    append-records for a CNAME that's only valid once a paired delete has
+    actually happened always comes back rejected, not just a scarier-looking
+    preview. apply_changes() must not ask dnshelper to dry-run that append at
+    all; it should synthesize the preview from what plan_changes() already
+    computed."""
+
+    def test_type_conflict_dry_run_does_not_call_dnshelper_for_the_append(self):
+        changes = {
+            "delete": [{"name": "autoconfig", "type": "A"}],
+            "append": [{"name": "autoconfig", "type": "CNAME", "data": "node.example.net."}],
+            "set": [],
+        }
+        with mock.patch.object(
+            dnsapply.dnshelperclient, "delete_records", return_value={"dry_run": True, "changes": {}}
+        ) as delete_mock, mock.patch.object(dnsapply.dnshelperclient, "append_records") as append_mock:
+            responses = dnsapply.apply_changes("dnshelper1", ZONE, changes, dry_run=True)
+
+        delete_mock.assert_called_once()
+        append_mock.assert_not_called()
+        self.assertEqual(responses["append"]["changes"]["add"], changes["append"])
+
+    def test_type_conflict_real_execution_calls_dnshelper_for_both_in_order(self):
+        changes = {
+            "delete": [{"name": "autoconfig", "type": "A"}],
+            "append": [{"name": "autoconfig", "type": "CNAME", "data": "node.example.net."}],
+            "set": [],
+        }
+        calls = []
+        with mock.patch.object(
+            dnsapply.dnshelperclient,
+            "delete_records",
+            side_effect=lambda *a, **kw: calls.append("delete") or {"changes": {}},
+        ), mock.patch.object(
+            dnsapply.dnshelperclient,
+            "append_records",
+            side_effect=lambda *a, **kw: calls.append("append") or {"changes": {}},
+        ):
+            dnsapply.apply_changes("dnshelper1", ZONE, changes, dry_run=False)
+
+        self.assertEqual(calls, ["delete", "append"])
+
+    def test_append_only_no_delete_is_still_dry_run_through_dnshelper(self):
+        # No paired delete -- dnshelper *can* meaningfully dry-run this one
+        # (a plain append for a missing record), so it should still be
+        # asked to.
+        changes = {"delete": [], "append": [{"name": "autodiscover", "type": "CNAME", "data": "x."}], "set": []}
+        with mock.patch.object(
+            dnsapply.dnshelperclient, "append_records", return_value={"changes": {}}
+        ) as append_mock:
+            dnsapply.apply_changes("dnshelper1", ZONE, changes, dry_run=True)
+
+        append_mock.assert_called_once_with("dnshelper1", ZONE, changes["append"], dry_run=True)
 
 
 if __name__ == "__main__":
