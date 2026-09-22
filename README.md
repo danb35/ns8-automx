@@ -1,33 +1,21 @@
-# ns8-kickstart
+# ns8-automx
 
-This is a template module for [NethServer 8](https://github.com/NethServer/ns8-core).
-To start a new module from it:
+Email client autoconfiguration for [NethServer 8](https://github.com/NethServer/ns8-core)
+mail domains, built on [croessner/automx](https://github.com/croessner/automx). Clients
+that are given only an email address (Thunderbird via Mail Autoconfig, Outlook via
+Microsoft Autodiscover, Apple Mail via an unsigned `.mobileconfig` profile) discover the
+IMAP and SMTP settings of the NS8 mail server on their own, with the correct login name
+and display name looked up from the domain's accounts provider (OpenLDAP or Samba AD).
 
-1. Click on [Use this template](https://github.com/NethServer/ns8-kickstart/generate).
-   Name your repo with `ns8-` prefix (e.g. `ns8-mymodule`). 
-   Do not end your module name with a number, like ~~`ns8-baaad2`~~!
+See [DESIGN.md](DESIGN.md) for the full design, including scope, the NS8 platform facts
+it depends on, and the DNS records (`autoconfig.<domain>`, `autodiscover.<domain>`,
+`_autodiscover._tcp.<domain>`) it manages directly through
+[ns8-dnshelper](https://github.com/danb35/ns8-dnshelper) when available.
 
-1. Clone the repository, enter the cloned directory and
-   [configure your GIT identity](https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup#_your_identity)
-
-1. Rename some references inside the repo:
-   ```
-   modulename=$(basename $(pwd) | sed 's/^ns8-//') &&
-   git mv imageroot/systemd/user/kickstart.service imageroot/systemd/user/${modulename}.service &&
-   git mv imageroot/systemd/user/kickstart-app.service imageroot/systemd/user/${modulename}-app.service && 
-   git mv tests/kickstart.robot tests/${modulename}.robot &&
-   sed -i "s/kickstart/${modulename}/g" $(find .github/ * -type f) &&
-   git commit -a -m "Repository initialization"
-   ```
-
-1. Edit this `README.md` file, by replacing this section with your module
-   description
-
-1. Adjust `.github/workflows` to your needs. `clean-registry.yml` might
-   need the proper list of image names to work correctly. Unused workflows
-   can be disabled from the GitHub Actions interface.
-
-1. Commit and push your local changes
+> This repository was generated from the
+> [ns8-kickstart](https://github.com/NethServer/ns8-kickstart) template; the sections
+> below (Install/Configure/Debug) still describe the template's placeholder actions and
+> will be rewritten as the module's own actions land.
 
 ## Install
 
