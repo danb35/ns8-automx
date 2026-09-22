@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# automx "script" backend lookup helper. Runs INSIDE the automx-app
+# container (baked into the image by the Containerfile), invoked by automx
+# itself as a plain subprocess -- not by the NS8 agent framework, so no
+# "agent" module is available here, only the stdlib and python-ldap.
+#
+# Contract (DESIGN.md 3.3, "script backend contract"):
+#   argv:   automx-ldap-lookup <local-part> <domain> <email-address>
+#   stdout: exactly one line "<login>|<display_name>", always, even on a
+#           miss or an LDAP error -- automx has no distinct "miss" signal
+#           separate from "crash" (any nonzero exit is fatal to the
+#           client's request), so falling back has to happen in here.
+#   exit:   always 0. A nonzero exit is reserved for "this script itself is
+#           broken", since automx cannot tell that apart from a lookup miss.
+#
+# Connection parameters (ldapproxy endpoint, bind credentials, base DN,
+# schema, the hidden-users filter clause) are rendered on the host by
+# imageroot/bin/render-automx-conf, which has access to the NS8 agent SDK
+# and Ldapproxy() that this script does not; they arrive here as a
+# read-only, per-instance JSON file (DESIGN.md 3.3/4.2 -- not backed up,
+# regenerated on every render, same as automx.conf itself).
+
+import json
+import os
+import sys
+
+CONFIG_PATH = os.environ.get(
+    "AUTOMX_LDAP_LOOKUP_CONFIG", "/etc/automx/ldap-lookup.json"
+)
+
+# rfc2307 (OpenLDAP) vs ad (Samba AD) attribute mapping -- DESIGN.md 3.3.
+ATTR_MAP = {
+    "rfc2307": {"login": "uid", "mail": "mail", "name": "cn"},
+    "ad": {"login": "sAMAccountName", "mail": "mail", "name": "displayName"},
+}
+
+LDAP_TIMEOUT_SECONDS = 5
+
+
+def emit(login, display_name=""):
+    # separator = "|" in automx.conf (DESIGN.md 3.3) -- a display name can
+    # contain a space, so the default whitespace split would break it.
+    # A literal "|" in a display name would break the split the other way,
+    # so it's stripped rather than escaped (automx's script backend has no
+    # escaping mechanism of its own).
+    print(f"{login}|{display_name.replace('|', '')}")
+
+
+def fallback(email_address):
+    emit(email_address)
+
+
+def lookup(local_part, domain, email_address):
+    with open(CONFIG_PATH, encoding="utf-8") as f:
+        config = json.load(f)
+
+    import ldap
+    import ldap.filter
+
+    attrs = ATTR_MAP[config["schema"]]
+
+    conn = ldap.initialize(f"ldap://{config['host']}:{config['port']}")
+    conn.set_option(ldap.OPT_NETWORK_TIMEOUT, LDAP_TIMEOUT_SECONDS)
+    conn.set_option(ldap.OPT_TIMEOUT, LDAP_TIMEOUT_SECONDS)
+    conn.set_option(ldap.OPT_REFERRALS, 0)
+    try:
+        conn.simple_bind_s(config["bind_dn"], config["bind_password"])
+
+        # Lookup rule (DESIGN.md 3.3): an entry whose login attribute equals
+        # the local part (covers "dan@domain" and bare "dan"), else an entry
+        # whose mail attribute equals the full address.
+        local_esc = ldap.filter.escape_filter_chars(local_part)
+        mail_esc = ldap.filter.escape_filter_chars(email_address)
+        hidden_clause = config.get("hidden_users_filter") or ""
+        search_filter = (
+            f"(&(|({attrs['login']}={local_esc})({attrs['mail']}={mail_esc}))"
+            f"{hidden_clause})"
+        )
+
+        results = conn.search_s(
+            config["base_dn"],
+            ldap.SCOPE_SUBTREE,
+            search_filter,
+            [attrs["login"], attrs["name"]],
+        )
+    finally:
+        conn.unbind_s()
+
+    for _dn, entry in results:
+        login_values = entry.get(attrs["login"])
+        if not login_values:
+            continue
+        login = login_values[0].decode("utf-8")
+        name_values = entry.get(attrs["name"]) or [b""]
+        display_name = name_values[0].decode("utf-8")
+        return login, display_name
+
+    return None
+
+
+def main():
+    if len(sys.argv) != 4:
+        # Wrong argv count is a script/config bug, not a lookup miss -- but
+        # still exit 0 with the bare address rather than 400-ing every
+        # client because of a local misconfiguration.
+        fallback(sys.argv[-1] if len(sys.argv) > 1 else "")
+        return
+
+    _local_part, _domain, email_address = sys.argv[1:4]
+
+    try:
+        found = lookup(*sys.argv[1:4])
+    except Exception:
+        # Connection refused, bind failure, timeout, malformed config file,
+        # missing python-ldap, anything -- all fall back the same way.
+        found = None
+
+    if found is None:
+        fallback(email_address)
+    else:
+        emit(*found)
+
+
+if __name__ == "__main__":
+    main()

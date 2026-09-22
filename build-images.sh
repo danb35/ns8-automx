@@ -35,28 +35,30 @@ buildah run \
 buildah add "${container}" imageroot /imageroot
 buildah add "${container}" ui/dist /ui
 
+# Build the automx application image from source (see Containerfile).
+# Upstream publishes ghcr.io/croessner/automx, but neither of its (pre-release)
+# tags installs the "ldap" extra or the native libraries it needs to compile
+# (DESIGN.md 4.5, VERIFY item 4), so we build our own instead of referencing
+# a third-party org.nethserver.images entry. It's published as a second image
+# under the same ref/tag as this module (see the CI tagging loop below), and
+# imageroot/systemd/user/automx-app.service runs it directly by name.
+imagetag=$(printf '%s' "${IMAGETAG:-latest}" | tr '/' '-')
+automxappimage="${repobase}/automx-app"
+buildah build --tag "${automxappimage}" -f Containerfile .
+images+=("${automxappimage}")
+
 buildah config --entrypoint=/ \
-    --label="org.nethserver.authorizations=traefik@node:routeadm" \
+    --label="org.nethserver.authorizations=traefik@node:routeadm node:reader cluster:accountconsumer dnshelper@cluster:dnswriter mail@any:mailadm" \
     --label="org.nethserver.tcp-ports-demand=1" \
     --label="org.nethserver.rootfull=0" \
     --label="org.nethserver.min-core=3.20.1" \
-    --label="org.nethserver.images=docker.io/mariadb:10.11.19 docker.io/nginx:1.30.0-alpine" \
+    --label="org.nethserver.images=${automxappimage}:${imagetag}" \
     "${container}"
 # Commit the image
 buildah commit "${container}" "${repobase}/${reponame}"
 
 # Append the image URL to the images array
 images+=("${repobase}/${reponame}")
-
-#
-# NOTICE:
-#
-# It is possible to build and publish multiple images.
-#
-# 1. create another buildah container
-# 2. add things to it and commit it
-# 3. append the image url to the images array
-#
 
 #
 # Setup CI when pushing to Github. 
