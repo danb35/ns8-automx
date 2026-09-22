@@ -29,7 +29,9 @@
               placeholder="automx.example.org"
               v-model.trim="serviceHost"
               class="mg-bottom maxwidth"
-              :invalid-message="fieldError(error.configureModule, 'service_host')"
+              :invalid-message="
+                fieldError(error.configureModule, 'service_host')
+              "
               :disabled="loading.getConfiguration || loading.configureModule"
               ref="serviceHost"
             />
@@ -40,8 +42,12 @@
               :disabled="stillLoading"
               class="mg-bottom"
             >
-              <template slot="text-left">{{ $t("settings.disabled") }}</template>
-              <template slot="text-right">{{ $t("settings.enabled") }}</template>
+              <template slot="text-left">{{
+                $t("settings.disabled")
+              }}</template>
+              <template slot="text-right">{{
+                $t("settings.enabled")
+              }}</template>
             </NsToggle>
             <NsToggle
               value="displayNames"
@@ -53,8 +59,12 @@
               <template #tooltip>
                 {{ $t("settings.display_names_tooltip") }}
               </template>
-              <template slot="text-left">{{ $t("settings.disabled") }}</template>
-              <template slot="text-right">{{ $t("settings.enabled") }}</template>
+              <template slot="text-left">{{
+                $t("settings.disabled")
+              }}</template>
+              <template slot="text-right">{{
+                $t("settings.enabled")
+              }}</template>
             </NsToggle>
             <NsInlineNotification
               kind="info"

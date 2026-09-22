@@ -19,7 +19,9 @@
       <template v-else>
         <p class="mg-bottom-md">{{ $t("profile_link.intro") }}</p>
 
-        <p class="mg-bottom-sm"><strong>{{ $t("profile_link.url") }}</strong></p>
+        <p class="mg-bottom-sm">
+          <strong>{{ $t("profile_link.url") }}</strong>
+        </p>
         <NsCodeSnippet
           :copyTooltip="core.$t('common.copy_to_clipboard')"
           :copy-feedback="core.$t('common.copied_to_clipboard')"

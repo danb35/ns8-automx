@@ -93,7 +93,8 @@
                     :checked="row.enabled"
                     @change="toggleDomain(row)"
                     :disabled="
-                      loading.toggle === row.domain || (row.orphaned && !row.enabled)
+                      loading.toggle === row.domain ||
+                      (row.orphaned && !row.enabled)
                     "
                     hideLabel
                     :label="$t('domains.enabled')"
@@ -114,7 +115,11 @@
                           : 'domains.route_status_not_applicable'
                       )
                     "
-                    :kind="row.enabled && row.route_status === 'configured' ? 'green' : 'gray'"
+                    :kind="
+                      row.enabled && row.route_status === 'configured'
+                        ? 'green'
+                        : 'gray'
+                    "
                   />
                 </cv-data-table-cell>
                 <cv-data-table-cell class="table-overflow-menu-cell">
@@ -201,12 +206,9 @@ export default {
   computed: {
     ...mapState(["core", "appName"]),
     columns() {
-      return [
-        "domain",
-        "enabled",
-        "dns_status",
-        "route_status",
-      ].map((c) => this.$t("domains.col_" + c));
+      return ["domain", "enabled", "dns_status", "route_status"].map((c) =>
+        this.$t("domains.col_" + c)
+      );
     },
     rows() {
       return this.domains.map((d) => ({
@@ -291,11 +293,7 @@ export default {
         }
         await this.load();
       } catch (err) {
-        this.say(
-          "error",
-          this.$t("action.set-domains"),
-          this.errorText(err)
-        );
+        this.say("error", this.$t("action.set-domains"), this.errorText(err));
       }
       this.loading.toggle = "";
     },

@@ -32,7 +32,9 @@
         >
           <template #description>
             <p>
-              {{ $t("dns_status.not_permitted_description", { zone: dns.zone }) }}
+              {{
+                $t("dns_status.not_permitted_description", { zone: dns.zone })
+              }}
             </p>
             <p class="mg-top-sm">{{ $t("dns_status.suggested_rule") }}</p>
             <NsCodeSnippet
@@ -99,7 +101,11 @@
             <p class="mg-bottom-sm">
               <strong>{{ $t("dns_status.preview_title") }}</strong>
             </p>
-            <p v-if="!preview.changes.add.length && !preview.changes.remove.length">
+            <p
+              v-if="
+                !preview.changes.add.length && !preview.changes.remove.length
+              "
+            >
               {{ $t("dns_status.preview_nothing") }}
             </p>
             <ul v-else class="preview-list">
@@ -127,7 +133,11 @@
             >
               {{ $t("dns_status.confirm") }}
             </NsButton>
-            <NsButton kind="secondary" :disabled="loading.apply" @click="preview = null">
+            <NsButton
+              kind="secondary"
+              :disabled="loading.apply"
+              @click="preview = null"
+            >
               {{ core.$t("common.cancel") }}
             </NsButton>
           </div>
@@ -170,7 +180,9 @@
       </template>
     </template>
     <template slot="secondary-button">{{ core.$t("common.close") }}</template>
-    <template slot="primary-button">{{ $t("dns_status.check_again") }}</template>
+    <template slot="primary-button">{{
+      $t("dns_status.check_again")
+    }}</template>
   </NsModal>
 </template>
 
@@ -219,9 +231,7 @@ export default {
     },
     planText() {
       return this.plan
-        .map(
-          (r) => `${r.host}\t${r.suggested_ttl}\tIN\t${r.type}\t${r.value}`
-        )
+        .map((r) => `${r.host}\t${r.suggested_ttl}\tIN\t${r.type}\t${r.value}`)
         .join("\n");
     },
   },
@@ -286,7 +296,11 @@ export default {
       this.error.apply = "";
       try {
         await this.callAction("apply-dns", {
-          data: { domain: this.domain, action: this.pendingAction, dry_run: false },
+          data: {
+            domain: this.domain,
+            action: this.pendingAction,
+            dry_run: false,
+          },
         });
         this.preview = null;
         await this.load();

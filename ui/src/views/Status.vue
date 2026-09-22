@@ -34,7 +34,9 @@
         <NsInfoCard
           light
           :title="'' + config.enabled_domain_count"
-          :description="$tc('status.enabled_domains', config.enabled_domain_count)"
+          :description="
+            $tc('status.enabled_domains', config.enabled_domain_count)
+          "
           :icon="Email32"
           :loading="loading.getConfiguration"
           class="min-height-card"
