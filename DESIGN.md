@@ -231,7 +231,7 @@ Schemas must accept `null` as well as `{}` for argument-less actions (the admin 
 
 | Action | Purpose |
 |---|---|
-| `configure-module` | Settings: service host override (default node FQDN), `http2https` default. Starts the service if at least one domain is enabled. |
+| `configure-module` | Settings: service host override (default node FQDN), `http2https` default, `display_names` toggle (default on — see 8). Starts the service if at least one domain is enabled. |
 | `get-configuration` | Settings plus a summary. |
 | `get-domains` | Mail domains from the mail module merged with `state/domains.json`: enabled flag, route status, DNS status per record, orphan flag. |
 | `set-domains` | Enable/disable domains; applies routes, renders config, validates, reloads. |
@@ -259,7 +259,7 @@ Pages:
 
 - **Status**: service state, number of enabled domains, mail instance and user domain in use, dnshelper present/absent, link to logs.
 - **Domains**: table with columns domain, enable toggle, DNS status (a summary tag with a detail drawer), route/certificate status, actions. Row action opens a DNS dialog: records with per-record status, conflicts, `dry_run` preview, and the Create / Overwrite / Skip choices when dnshelper can act; otherwise a copyable list of records and a "check again" button. A banner explains the missing-rule case with the rule to add. A second row action, **Get profile link**, opens the dialog described in 7.1.
-- **Settings**: service host override, `http2https` default.
+- **Settings**: service host override, `http2https` default, display-names toggle (on by default — 8), with copy explaining the disclosure trade-off.
 - **About**: standard.
 
 The domains table must state clearly, for domains with no dnshelper coverage, that DNS is manual. English is the source language in `ui/public/i18n/en/translation.json`.
@@ -305,7 +305,7 @@ Notes on the mock-up, to carry into implementation:
 - Container: non-root as shipped (UID 10001), read-only root filesystem, config mounted read-only, no extra capabilities. The published port is bound to the node's loopback only; the only exposure is through Traefik.
 - Do not enable proxy-header trust in automx beyond what the packaged `serve` default allows. Do not forward client-supplied base URLs.
 - The LDAP bind credentials come from ldapproxy for the module's own bound domain; treat them as secrets (0600 file, not in Redis, not in backups, not in logs). **RESOLVED** (see 3.3): the credentials are consumed by our own lookup script, not automx's native LDAP backend (which is not used — see 3.3's `script`-backend decision); connect to ldapproxy with `ldap://` and no TLS, matching automx's own `usetls = no` compatibility finding.
-- Autoconfig responses contain server names and, via LDAP, a display name for an address the requester supplied. That is address-to-name disclosure by design of the protocol. Decide whether to restrict display names to authenticated lookups (they cannot be) or omit display names by default (**decision needed**: default on, with a setting to turn off).
+- Autoconfig responses contain server names and, via LDAP, a display name for an address the requester supplied. That is address-to-name disclosure by design of the protocol. **DECIDED** (2026-09-22): display names are included by default, matching normal mail-autoconfig client behavior, with a per-instance setting to turn them off for administrators who'd rather trade client UX for reduced address-to-name disclosure. Surface this trade-off explicitly in the Settings page copy and README, since the endpoints are unauthenticated by protocol design and this setting is the only mitigation available.
 - Rate limiting belongs at the ingress (Traefik); automx removed its own failure counter. Note this in the README and consider a default Traefik middleware if the platform allows.
 - The profile-link snippet (7.1) is a thin wrapper around the already-public mobileconfig URL: it adds no authentication and should not be described to administrators as adding any. Its only purpose is convenience (a form instead of a bare URL to distribute).
 
