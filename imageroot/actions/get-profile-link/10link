@@ -48,7 +48,7 @@ html_snippet = f"""<!-- Paste this where you want a "Download email settings" fo
   <input id="automx-email" name="emailaddress" type="email"
          placeholder="you@{escaped_domain}" required
          pattern="[^@\\s]+@{regex_domain}"
-         title="Must be a {escaped_domain} address"
+         title="Must end in @{escaped_domain}"
          style="width:100%;box-sizing:border-box;margin:.4em 0;padding:.4em">
   <button type="submit">Download mail profile</button>
 </form>
