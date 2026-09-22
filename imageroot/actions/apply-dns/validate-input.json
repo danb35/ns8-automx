@@ -1,0 +1,36 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "apply-dns input",
+    "$id": "http://nethserver.org/json-schema/task/input/automx/apply-dns",
+    "description": "Create or overwrite one domain's DNS records through dnshelper, after a dry run (DESIGN.md 5.3.4/5.3.5). dnshelper only -- never offered when it's absent or the zone isn't managed.",
+    "examples": [
+        {
+            "domain": "example.com",
+            "action": "create",
+            "dry_run": true
+        }
+    ],
+    "type": "object",
+    "required": [
+        "domain",
+        "action",
+        "dry_run"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "domain": {
+            "type": "string"
+        },
+        "action": {
+            "type": "string",
+            "enum": [
+                "create",
+                "overwrite"
+            ]
+        },
+        "dry_run": {
+            "type": "boolean",
+            "description": "Required, not defaulted: the caller must be explicit about previewing vs. executing (DESIGN.md 5.3.5, 'always run a dry_run first')."
+        }
+    }
+}

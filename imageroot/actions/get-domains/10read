@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
+
+import agent
+from automx import dnshelperclient, dnsstatus, mail, node, routes, state
+
+rdb = agent.redis_connect(use_replica=True)
+
+domains_state = state.load_domains()
+settings = state.load_settings()
+
+try:
+    _module_id, _hostname, _user_domain, mail_domain_names = mail.get_instance_info(rdb)
+except (mail.MailNotFound, mail.MailNotConfigured):
+    mail_domain_names = set()
+
+dnshelper_target = dnshelperclient.find_instance()
+target_fqdn = settings.get("service_host") or node.get_node_fqdn()
+
+module_id = os.environ["MODULE_ID"]
+
+# Union of domains the mail module reports and domains we still have a
+# stored flag for (an orphan may be disabled or still enabled -- DESIGN.md
+# 4.2: "the stored flag is kept and reported as orphaned in the UI until
+# the administrator removes it").
+all_domains = sorted(mail_domain_names | domains_state.keys())
+
+domains_out = []
+for domain in all_domains:
+    enabled = domains_state.get(domain, {}).get("enabled", False)
+    orphaned = domain not in mail_domain_names
+
+    route_status = "not_configured"
+    if enabled and not orphaned:
+        autoconfig_instance = routes.instance_name(module_id, "autoconfig", domain, 0)
+        if agent.get_route(autoconfig_instance):
+            route_status = "configured"
+
+    dns = dnsstatus.domain_dns_status(domain, target_fqdn, dnshelper_target)
+
+    domains_out.append(
+        {
+            "domain": domain,
+            "enabled": enabled,
+            "orphaned": orphaned,
+            "route_status": route_status,
+            "dns": dns,
+        }
+    )
+
+json.dump({"dnshelper_present": dnshelper_target is not None, "domains": domains_out}, fp=sys.stdout)

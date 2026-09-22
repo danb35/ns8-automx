@@ -33,7 +33,7 @@ RUN git clone --depth=1 --branch="${AUTOMX_REF}" \
 
 RUN python -m venv /opt/automx \
     && /opt/automx/bin/pip install --no-cache-dir --upgrade pip \
-    && /opt/automx/bin/pip install --no-cache-dir '.[ldap]'
+    && /opt/automx/bin/pip install --no-cache-dir '.[ldap]' dnspython==2.8.0
 
 FROM python:3.14.7-slim-trixie AS runtime
 
@@ -49,11 +49,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /opt/automx /opt/automx
 
-# The script-backend lookup helper (DESIGN.md 3.3) is static code, not
-# per-instance state, so it's baked into the image here. Only the rendered
-# automx.conf and its connection-parameters file (imageroot/bin/render-
-# automx-conf's output) are mounted in at runtime from module state.
+# Static helper scripts (DESIGN.md 3.3, 5.4), baked into the image since
+# they're code, not per-instance state:
+#  - automx-ldap-lookup: the script-backend lookup helper automx itself
+#    invokes as a subprocess.
+#  - automx-dns-check: the no-dnshelper DNS status check (5.4), invoked by
+#    the host-side check-dns action via a one-off `podman run --rm`.
 COPY --chmod=0755 imageroot/bin/automx-ldap-lookup /usr/local/bin/automx-ldap-lookup
+COPY --chmod=0755 imageroot/bin/automx-dns-check /usr/local/bin/automx-dns-check
 
 ENV PATH="/opt/automx/bin:${PATH}" \
     AUTOMX_CONFIG=/etc/automx/automx.conf

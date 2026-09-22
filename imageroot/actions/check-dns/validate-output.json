@@ -1,0 +1,95 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "check-dns output",
+    "$id": "http://nethserver.org/json-schema/task/output/automx/check-dns",
+    "description": "check-dns",
+    "type": "object",
+    "required": [
+        "results"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "results": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "domain",
+                    "dns"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "domain": {
+                        "type": "string"
+                    },
+                    "dns": {
+                        "type": "object",
+                        "required": [
+                            "managed",
+                            "zone",
+                            "allowed",
+                            "records"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                            "managed": {
+                                "type": "boolean"
+                            },
+                            "zone": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "allowed": {
+                                "type": [
+                                    "boolean",
+                                    "null"
+                                ]
+                            },
+                            "records": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "required": [
+                                        "host",
+                                        "type",
+                                        "value",
+                                        "status"
+                                    ],
+                                    "additionalProperties": true,
+                                    "properties": {
+                                        "host": {
+                                            "type": "string"
+                                        },
+                                        "type": {
+                                            "type": "string",
+                                            "enum": [
+                                                "CNAME",
+                                                "SRV"
+                                            ]
+                                        },
+                                        "value": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "enum": [
+                                                "ok",
+                                                "missing",
+                                                "conflict",
+                                                "unmanaged",
+                                                "not_permitted",
+                                                "unknown"
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

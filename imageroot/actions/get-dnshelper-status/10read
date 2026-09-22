@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
+
+from automx import dnshelperclient, state
+
+target = dnshelperclient.find_instance()
+domains_state = state.load_domains()
+
+domains_out = []
+if target:
+    for domain in sorted(domains_state):
+        zone_info = dnshelperclient.has_zone(target, domain)
+        domains_out.append(
+            {
+                "domain": domain,
+                "managed": zone_info["managed"],
+                "zone": zone_info["zone"],
+                "allowed": zone_info["allowed"],
+            }
+        )
+
+json.dump({"present": target is not None, "instance": target, "domains": domains_out}, fp=sys.stdout)

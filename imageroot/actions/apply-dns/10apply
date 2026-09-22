@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
+
+import agent
+from automx import dns, dnsapply, dnshelperclient, node, state
+
+data = json.load(sys.stdin)
+domain = data["domain"]
+action = data["action"]
+dry_run = data["dry_run"]
+
+target = dnshelperclient.find_instance()
+if target is None:
+    agent.set_status("validation-failed")
+    json.dump(
+        [{"field": "domain", "parameter": "domain", "value": domain, "error": "dnshelper_absent"}],
+        fp=sys.stdout,
+    )
+    sys.exit(3)
+
+zone_info = dnshelperclient.has_zone(target, domain)
+if not zone_info["managed"] or not zone_info["allowed"]:
+    agent.set_status("validation-failed")
+    json.dump(
+        [
+            {
+                "field": "domain",
+                "parameter": "domain",
+                "value": domain,
+                "error": "zone_not_permitted" if zone_info["managed"] else "zone_unmanaged",
+            }
+        ],
+        fp=sys.stdout,
+    )
+    sys.exit(3)
+
+zone = zone_info["zone"]
+settings = state.load_settings()
+target_fqdn = settings.get("service_host") or node.get_node_fqdn()
+expected = dns.expected_records(domain, target_fqdn)
+
+try:
+    existing_records = dnshelperclient.get_records(target, zone)
+    changes = dnsapply.plan_changes(zone, expected, existing_records, action)
+    responses = dnsapply.apply_changes(target, zone, changes, dry_run)
+except dnshelperclient.DnshelperError as exc:
+    agent.set_status("validation-failed")
+    json.dump(
+        [{"field": "domain", "parameter": "domain", "value": domain, "error": exc.code, "message": exc.message}],
+        fp=sys.stdout,
+    )
+    sys.exit(3)
+
+add, remove = [], []
+for response in responses.values():
+    if response is None:
+        continue
+    add.extend(response["changes"]["add"])
+    remove.extend(response["changes"]["remove"])
+
+json.dump({"dry_run": dry_run, "changes": {"add": add, "remove": remove}}, fp=sys.stdout)

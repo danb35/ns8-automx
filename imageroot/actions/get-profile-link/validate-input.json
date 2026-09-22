@@ -1,0 +1,21 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "get-profile-link input",
+    "$id": "http://nethserver.org/json-schema/task/input/automx/get-profile-link",
+    "description": "get-profile-link",
+    "examples": [
+        {
+            "domain": "example.com"
+        }
+    ],
+    "type": "object",
+    "required": [
+        "domain"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "domain": {
+            "type": "string"
+        }
+    }
+}

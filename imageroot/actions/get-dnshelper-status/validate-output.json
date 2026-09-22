@@ -1,0 +1,57 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "get-dnshelper-status output",
+    "$id": "http://nethserver.org/json-schema/task/output/automx/get-dnshelper-status",
+    "description": "Presence and per-zone access, so the UI can say exactly what's missing (DESIGN.md 6.1, CLAUDE.md's 'must say which rule to add').",
+    "type": "object",
+    "required": [
+        "present",
+        "instance",
+        "domains"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "present": {
+            "type": "boolean"
+        },
+        "instance": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "domains": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "domain",
+                    "managed",
+                    "zone",
+                    "allowed"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "domain": {
+                        "type": "string"
+                    },
+                    "managed": {
+                        "type": "boolean"
+                    },
+                    "zone": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "allowed": {
+                        "type": [
+                            "boolean",
+                            "null"
+                        ]
+                    }
+                }
+            }
+        }
+    }
+}

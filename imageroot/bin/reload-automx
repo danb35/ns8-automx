@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Render -> validate -> promote -> restart, in that order (DESIGN.md 4.3:
+# "A failing validation aborts the reload and leaves the previous config
+# running"). configure-module and set-domains call this as their last step
+# instead of calling render-automx-conf + systemctl restart directly, so a
+# bad render or a config that fails `automx config validate` never takes
+# down a working instance.
+#
+# Exit codes: 0 (reloaded, or cleanly stopped because zero domains are
+# enabled/usable), 1 (render or validation failed -- previous config, if
+# any, is left running).
+
+import json
+import os
+import subprocess
+import sys
+
+import agent
+
+STATE_DIR = os.environ["AGENT_STATE_DIR"]
+INSTALL_DIR = os.environ["AGENT_INSTALL_DIR"]
+AUTOMX_CONF_PATH = os.path.join(STATE_DIR, "automx.conf")
+LDAP_LOOKUP_PATH = os.path.join(STATE_DIR, "ldap-lookup.json")
+STAGING_SUFFIX = ".staging"
+
+
+def run_render():
+    return subprocess.run(
+        [os.path.join(INSTALL_DIR, "bin", "render-automx-conf"), "--suffix", STAGING_SUFFIX],
+        capture_output=True,
+        text=True,
+    )
+
+
+def run_validate(staged_conf_path, domain):
+    return subprocess.run(
+        [
+            "podman",
+            "run",
+            "--rm",
+            "--volume",
+            f"{staged_conf_path}:/etc/automx/automx.conf:ro,Z",
+            os.environ["AUTOMX_APP_IMAGE"],
+            "automx",
+            "config",
+            "validate",
+            "--config",
+            "/etc/automx/automx.conf",
+            "--domain",
+            domain,
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+
+def discard_staged():
+    for path in (AUTOMX_CONF_PATH + STAGING_SUFFIX, LDAP_LOOKUP_PATH + STAGING_SUFFIX):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+
+
+def stop_and_clear():
+    agent.run_helper("systemctl", "--user", "stop", "automx.service")
+    for path in (AUTOMX_CONF_PATH, LDAP_LOOKUP_PATH):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+
+
+def main():
+    render = run_render()
+
+    if render.returncode == 1:
+        # Nothing to render (no domains enabled/usable, or mail isn't
+        # configured yet) -- a valid state, not a failure (DESIGN.md 4.3).
+        stop_and_clear()
+        if render.stderr:
+            print(render.stderr, file=sys.stderr, end="")
+        return 0
+
+    if render.returncode != 0:
+        print(agent.SD_ERR + "render-automx-conf failed:\n" + render.stderr, file=sys.stderr)
+        return 1
+
+    enabled_domains = json.loads(render.stdout)
+    staged_conf_path = AUTOMX_CONF_PATH + STAGING_SUFFIX
+
+    for domain in enabled_domains:
+        validate = run_validate(staged_conf_path, domain)
+        if validate.returncode != 0:
+            discard_staged()
+            print(
+                agent.SD_ERR
+                + f"automx config validate failed for {domain}, keeping the previous config:\n"
+                + validate.stdout
+                + validate.stderr,
+                file=sys.stderr,
+            )
+            return 1
+
+    os.replace(staged_conf_path, AUTOMX_CONF_PATH)
+    os.replace(LDAP_LOOKUP_PATH + STAGING_SUFFIX, LDAP_LOOKUP_PATH)
+
+    # Plain restart, not try-restart: this must also start the service the
+    # first time a domain is enabled, when it isn't running yet.
+    agent.run_helper("systemctl", "--user", "enable", "automx.service").check_returncode()
+    agent.run_helper("systemctl", "--user", "restart", "automx.service").check_returncode()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

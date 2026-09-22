@@ -1,0 +1,41 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "apply-dns output",
+    "$id": "http://nethserver.org/json-schema/task/output/automx/apply-dns",
+    "description": "The combined dnshelper changes across the delete/append/set calls apply-dns issued (DESIGN.md 5.3.4).",
+    "type": "object",
+    "required": [
+        "dry_run",
+        "changes"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "dry_run": {
+            "type": "boolean"
+        },
+        "changes": {
+            "type": "object",
+            "required": [
+                "add",
+                "remove"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "add": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                    }
+                },
+                "remove": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,15 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "get-domains input",
+    "$id": "http://nethserver.org/json-schema/task/input/automx/get-domains",
+    "description": "get-domains. Takes no arguments: the admin UI sends no payload.",
+    "examples": [
+        {}
+    ],
+    "type": [
+        "object",
+        "null"
+    ],
+    "additionalProperties": false,
+    "properties": {}
+}

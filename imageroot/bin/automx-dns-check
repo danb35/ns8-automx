@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Resolver-based DNS check for the no-dnshelper path (DESIGN.md 5.4). Runs
+# INSIDE an ephemeral automx-app container (baked into the image, like
+# automx-ldap-lookup), invoked by the check-dns action via a one-off
+# `podman run --rm`, using default (internet-facing) container networking --
+# this checks the public view, which is what clients actually see, not
+# anything ldapproxy/host-loopback related.
+#
+# stdin:  JSON list of {"host", "type", "value"} (automx.dns.expected_records
+#         shape, from the host-side automx.dns module).
+# stdout: JSON list of {"host", "type", "value", "status"}, status one of
+#         "ok" (record present with the expected value), "missing" (no
+#         record of that type at that host), "conflict" (a record of that
+#         type exists but with a different value), or "unknown" (the lookup
+#         itself failed -- e.g. no working resolver, a timeout, NXDOMAIN at
+#         an ancestor).
+# exit:   always 0; a per-record "unknown" status carries the failure, same
+#         principle as automx-ldap-lookup's own always-exit-0 contract, so
+#         one bad lookup doesn't lose the status of the other records.
+
+import json
+import sys
+
+import dns.exception
+import dns.resolver
+
+TIMEOUT_SECONDS = 5
+
+
+def normalize_target(value):
+    return value.rstrip(".").lower()
+
+
+def check_cname(host, expected_value):
+    try:
+        answer = dns.resolver.resolve(host, "CNAME", lifetime=TIMEOUT_SECONDS)
+    except dns.resolver.NXDOMAIN:
+        return "missing"
+    except dns.resolver.NoAnswer:
+        return "missing"
+    except dns.exception.DNSException:
+        return "unknown"
+
+    targets = {normalize_target(str(rdata.target)) for rdata in answer}
+    if normalize_target(expected_value) in targets:
+        return "ok"
+    return "conflict"
+
+
+def check_srv(host, expected_value):
+    try:
+        answer = dns.resolver.resolve(host, "SRV", lifetime=TIMEOUT_SECONDS)
+    except dns.resolver.NXDOMAIN:
+        return "missing"
+    except dns.resolver.NoAnswer:
+        return "missing"
+    except dns.exception.DNSException:
+        return "unknown"
+
+    expected_priority, expected_weight, expected_port, expected_target = expected_value.split()
+    for rdata in answer:
+        actual = (
+            str(rdata.priority),
+            str(rdata.weight),
+            str(rdata.port),
+            normalize_target(str(rdata.target)),
+        )
+        if actual == (
+            expected_priority,
+            expected_weight,
+            expected_port,
+            normalize_target(expected_target),
+        ):
+            return "ok"
+    return "conflict"
+
+
+def main():
+    expected = json.load(sys.stdin)
+    results = []
+    for record in expected:
+        host, rtype, value = record["host"], record["type"], record["value"]
+        try:
+            if rtype == "CNAME":
+                status = check_cname(host, value)
+            elif rtype == "SRV":
+                status = check_srv(host, value)
+            else:
+                status = "unknown"
+        except Exception:
+            status = "unknown"
+        results.append({"host": host, "type": rtype, "value": value, "status": status})
+
+    json.dump(results, sys.stdout)
+
+
+if __name__ == "__main__":
+    main()

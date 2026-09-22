@@ -1,35 +1,38 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "Configure kickstart",
-    "$id": "http://nethserver.org/json-schema/task/input/kickstart/configure-module",
-    "description": "Configure kickstart",
+    "title": "Configure automx",
+    "$id": "http://nethserver.org/json-schema/task/input/automx/configure-module",
+    "description": "Settings for automx (DESIGN.md 6.1/7): service host override, http2https default, display-names toggle. All optional; an omitted field keeps its current value. Accepts null or {} so the admin UI can call it with no payload just to (re)apply current settings.",
     "examples": [
         {
-            "host": "kickstart.domain.org",
+            "service_host": null,
             "http2https": true,
-            "lets_encrypt": true
+            "display_names": true
         }
     ],
-    "type": "object",
-    "required": [
-        "host"
+    "type": [
+        "object",
+        "null"
     ],
+    "additionalProperties": false,
     "properties": {
-        "host": {
-            "type": "string",
-            "description": "Host name for the application, like 'kickstart.domain.org'",
-            "format": "hostname",
-            "pattern": "\\."
-        },
-        "lets_encrypt": {
-            "type": "boolean",
-            "title": "Let's Encrypt certificate",
-            "description": "Request a valid Let's Encrypt certificate."
+        "service_host": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "format": "idn-hostname",
+            "description": "CNAME/SRV target and Autodiscover host override. Null means \"use the node's own FQDN\" (DESIGN.md 5.1)."
         },
         "http2https": {
             "type": "boolean",
             "title": "HTTP to HTTPS redirection",
-            "description": "Redirect all the HTTP requests to HTTPS"
+            "description": "Default for new autoconfig/autodiscover routes (DESIGN.md 4.4)."
+        },
+        "display_names": {
+            "type": "boolean",
+            "title": "Include display names",
+            "description": "Include the LDAP-looked-up display name in autoconfig responses. The autoconfig/autodiscover/mobileconfig endpoints are unauthenticated by protocol design, so this is address-to-name disclosure for whoever asks (DESIGN.md 8); on by default, matching normal client behavior."
         }
     }
 }
