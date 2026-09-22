@@ -138,7 +138,7 @@ imap_encryption = ssl
 imap_auth = plaintext
 smtp = yes
 smtp_server = <mail hostname>
-smtp_port = 465                          ; or 587 + starttls, per mail module (VERIFY)
+smtp_port = 465
 smtp_encryption = ssl
 smtp_auth = plaintext
 ; ldap_* keys: local ldapproxy endpoint, bind DN/password, base DN, search filter
@@ -146,6 +146,8 @@ smtp_auth = plaintext
 ```
 
 Rules:
+
+- **Client-facing ports/encryption default to implicit TLS on the standard secure ports: IMAPS 993 and SMTPS 465** (both `ssl`, not `starttls`), regardless of what the internal `srv/tcp` Redis keys expose (those are unauthenticated internal endpoints on other ports, not what a client is told to connect to; see 3.2). Use these fixed defaults unless the mail module's own configuration explicitly reports different public-facing ports for the mail hostname (**VERIFY** as part of item 1: confirm whether the mail module ever advertises IMAP/SMTP on non-default public ports, and if so, prefer that value over the 993/465 default). Do not offer STARTTLS/587 in v1.
 
 - One shared `[global]` section is enough while there is one mail instance and one user domain. Only the `domains` allowlist varies.
 - No `allow_insecure`. Plain-text transport is refused.
@@ -226,6 +228,7 @@ Schemas must accept `null` as well as `{}` for argument-less actions (the admin 
 | `apply-dns` | For one domain: `create`, `overwrite` (with the list of conflicts to delete), each following `dry_run` then execute. dnshelper only. |
 | `get-dns-plan` | The records to create, for the manual path. |
 | `get-dnshelper-status` | Present or absent, default instance, `allowed` per zone, so the UI can say what is missing. |
+| `get-profile-link` | For one domain: the mobileconfig URL template and a ready-to-copy HTML snippet (7.1), built from the current `state/domains.json` and the mobileconfig path/query parameter recorded from automx (VERIFY item 3). No state changes, no automx call. |
 
 ### 6.2 Event handlers (`imageroot/events/<event>/`)
 
@@ -244,11 +247,41 @@ Follow NS8 conventions: user-fixable problems (no mail module, no user domain, c
 Pages:
 
 - **Status**: service state, number of enabled domains, mail instance and user domain in use, dnshelper present/absent, link to logs.
-- **Domains**: table with columns domain, enable toggle, DNS status (a summary tag with a detail drawer), route/certificate status, actions. Row action opens a DNS dialog: records with per-record status, conflicts, `dry_run` preview, and the Create / Overwrite / Skip choices when dnshelper can act; otherwise a copyable list of records and a "check again" button. A banner explains the missing-rule case with the rule to add.
+- **Domains**: table with columns domain, enable toggle, DNS status (a summary tag with a detail drawer), route/certificate status, actions. Row action opens a DNS dialog: records with per-record status, conflicts, `dry_run` preview, and the Create / Overwrite / Skip choices when dnshelper can act; otherwise a copyable list of records and a "check again" button. A banner explains the missing-rule case with the rule to add. A second row action, **Get profile link**, opens the dialog described in 7.1.
 - **Settings**: service host override, `http2https` default.
 - **About**: standard.
 
 The domains table must state clearly, for domains with no dnshelper coverage, that DNS is manual. English is the source language in `ui/public/i18n/en/translation.json`.
+
+### 7.1 Profile link and self-service snippet, for the administrator's own use
+
+The automx endpoints are unauthenticated by design (a client supplies only an email address), so there is no user-facing self-service page inside this module and no plan to add one — see 3.1 in the NS8 docs research: the closest built-in candidate, `/users-admin/<domain>/` from `ns8-user-manager`, only shows a static, non-linked "services" text list configured by the accounts-provider module, not an extension point this module can register into (that's tracked as a possible later, cross-module change; see section 12). Instead, this module gives the *administrator* two things per enabled domain, so they can put a download option wherever their users already are (an intranet page, the organization's wiki, a welcome email):
+
+1. **The direct URL**, shown and copyable in the dialog: the mobileconfig endpoint for that domain with a placeholder for the email address, for example `https://autoconfig.<domain>/<mobileconfig path>?emailaddress=%s` (the exact path and query parameter name are pinned to VERIFY item 3 below; the UI reads them from module state rather than hardcoding them, so a later automx version doesn't silently break the snippet).
+2. **A copyable HTML snippet**: a small, self-contained form (no external JS or CSS) the administrator can paste as-is into a page they control. Submitting it performs a plain GET to the profile URL with the typed address, which the browser treats as a normal download — no fetch call, no CORS concern, and no data other than the address the user themselves typed ever leaves their browser.
+
+Mock-up, one snippet per enabled domain (styling deliberately minimal; the admin's own page CSS will typically override it):
+
+```html
+<!-- Paste this where you want a "Download email settings" form.
+     Generated by ns8-automx for domain: example.com -->
+<form action="https://autoconfig.example.com/mobileconfig" method="get"
+      style="max-width:22rem;font:14px sans-serif">
+  <label for="automx-email">Your email address</label><br>
+  <input id="automx-email" name="emailaddress" type="email"
+         placeholder="you@example.com" required
+         pattern="[^@\s]+@example\.com"
+         title="Must be an example.com address"
+         style="width:100%;box-sizing:border-box;margin:.4em 0;padding:.4em">
+  <button type="submit">Download mail profile</button>
+</form>
+```
+
+Notes on the mock-up, to carry into implementation:
+
+- The `pattern` attribute is a client-side hint only (it stops the obviously wrong domain, not a security boundary); automx itself validates the address and simply won't find a match for an address outside its configured domains. The generated snippet fills in the real domain from `state/domains.json`.
+- If more than one domain is enabled, offer both a per-domain snippet (as above, simplest, works with no JavaScript) and, as a second copyable option, one combined snippet whose small inline script reads the typed address, extracts its domain, and sets the form's `action` to the matching enabled domain's URL before submitting, rejecting anything else with an inline message. Build the combined version only if the per-domain one turns out to be too limiting in practice; start with per-domain snippets in v1.
+- The snippet's `action` host is one of this module's own Traefik routes (`autoconfig.<domain>` from 4.4), so it needs no new route, no new action beyond generating the text, and no change to automx's own exposure (8): it's a convenience wrapper around a URL that is already public, not a new capability.
 
 ## 8. Security
 
@@ -257,14 +290,49 @@ The domains table must state clearly, for domains with no dnshelper coverage, th
 - The LDAP bind credentials come from ldapproxy for the module's own bound domain; treat them as secrets (0600 file, not in Redis, not in backups, not in logs). Do not enable unsafe LDAP certificate modes; the hop to ldapproxy is local plaintext, so keep certificate settings at the automx default and confirm this is compatible with a non-TLS loopback endpoint (**VERIFY**).
 - Autoconfig responses contain server names and, via LDAP, a display name for an address the requester supplied. That is address-to-name disclosure by design of the protocol. Decide whether to restrict display names to authenticated lookups (they cannot be) or omit display names by default (**decision needed**: default on, with a setting to turn off).
 - Rate limiting belongs at the ingress (Traefik); automx removed its own failure counter. Note this in the README and consider a default Traefik middleware if the platform allows.
+- The profile-link snippet (7.1) is a thin wrapper around the already-public mobileconfig URL: it adds no authentication and should not be described to administrators as adding any. Its only purpose is convenience (a form instead of a bare URL to distribute).
 
 ## 9. Testing
 
-- Unit tests (Python): renderer golden files for OpenLDAP and AD, zero/one/many domains, quoting of odd input; DNS comparison logic; state merge (mail domains + stored flags, orphans).
+Unit tests and CI catch regressions in the renderer and config validity, but they cannot exercise Traefik, ldapproxy, dnshelper or a real accounts provider — those only exist on an actual NS8 node. **A real-node integration pass is therefore mandatory before this module is considered done, not an optional nice-to-have**, modeled on dnshelper's own `tests/integration/` (a re-runnable script against a real node, not a one-off manual check).
+
+### 9.1 Unit tests and CI (no node needed)
+
+- Unit tests (Python): renderer golden files for OpenLDAP and AD, zero/one/many domains, quoting of odd input; DNS comparison logic (5.2's status model); state merge (mail domains + stored flags, orphans).
 - CI: build image, run `automx config validate` and `automx render autoconfig|autodiscover|mobileconfig` against rendered configs with a synthetic address.
-- Robot smoke test (`tests/`): install, `configure-module`, enable a domain, check service health, uninstall.
-- Integration on a real node (modeled on dnshelper's `tests/integration/`): mail module with a test domain, an OpenLDAP and a Samba AD domain, dnshelper with a test zone (RFC 2136 against local BIND is an option), covering conflicts and overwrite, aliases (expected fallback), and route/certificate creation.
-- Client tests, manual: Thunderbird (Autoconfig), Outlook (Autodiscover via CNAME and via SRV), Apple Mail (mobileconfig), using a user's primary address and an alias.
+- Robot smoke test (`tests/`, run by `test-module.sh` in CI): install, `configure-module`, enable a domain, check service health, uninstall. This runs on a throwaway CI node and cannot cover LDAP or dnshelper, since neither is installed there; it only proves the module starts and stops cleanly.
+
+### 9.2 Real-node integration test (required)
+
+Build a `tests/integration/` suite that installs this module on a real NS8 node alongside the mail module and an accounts provider, and drives it through `api-cli`/actions the way `tests/integration/consumer/` does for dnshelper. It must be re-runnable (clean up after itself, or refuse to run next to an existing instance, as dnshelper's does) and cover the full matrix below, not just one path through it — the goal is to catch the interactions unit tests can't see: real Redis service-discovery keys, real event payloads, real Traefik/Let's-Encrypt behavior, and the two accounts-provider schemas actually returning different attribute names.
+
+**Accounts provider (run the full matrix once per provider):**
+
+| Provider | Schema | What it proves |
+|---|---|---|
+| OpenLDAP | `rfc2307` | `uid`/`mail`/`cn` mapping (3.3) resolves a real bind, login and display name come back correctly |
+| Samba AD | `ad` | `sAMAccountName`/`mail`/`displayName` mapping resolves against a real AD-schema directory; catches attribute-name mistakes OpenLDAP testing alone would miss |
+
+For each provider, test: a user whose primary address matches the login (`dan@domain`), a user with a free-form alias (expected: static fallback per 3.3, not a wrong login), and the "no LDAP entry matches" and "LDAP unreachable" fallback paths (**VERIFY** item 2 — confirm actual automx behavior here, not just the desired one).
+
+**dnshelper (run the enable/DNS flow with and without it):** use RFC 2136 against a local BIND instance for the dnshelper zone in this suite (as dnshelper's own `helper/testdata/bind` does) — it's sufficient for automated testing since it needs no external account and dnshelper's live-provider behavior (Cloudflare, GoDaddy, Hetzner, name.com, Core-Networks) is already covered by dnshelper's own test suite against real domains and credentials; this module's tests only need to prove that *this module* drives the dnshelper consumer API correctly, not that dnshelper itself talks to a given provider correctly.
+
+| Scenario | What it proves |
+|---|---|
+| dnshelper installed, zone managed, no access rule yet | `not_permitted` path (5.3.6): the module detects the missing rule and surfaces the exact rule to add, rather than failing opaquely |
+| dnshelper installed, zone managed, rule granted, no existing records | Create path: `dry_run` preview, then `append-records`, then a passing DNS status |
+| dnshelper installed, zone managed, rule granted, conflicting record already present (e.g. an existing A record at `autoconfig.<domain>`) | Conflict detection (5.2) and both the overwrite path (`delete-records` + `append-records`) and the skip path |
+| dnshelper installed, but the domain's zone is *not* one dnshelper manages | `unmanaged` status; module falls back to the manual/check-only flow for that domain even though dnshelper is present |
+| dnshelper not installed at all | `agent.list_service_providers` returns empty; the module runs the resolver-based check (5.4) end to end and shows correct copyable records; no create/overwrite actions are offered |
+| dnshelper installed after the module was already configured (order-of-install) | `service-dnshelper-changed` (or the module noticing it on next check) picks up the newly available zone without requiring the domain to be disabled and re-enabled |
+
+**Combined with the above:** at least one full run of "OpenLDAP + dnshelper present" and one full run of "AD + dnshelper absent" (or the inverse pairing), so the two axes aren't only ever tested independently.
+
+**Also cover on the real node:** Traefik route and Let's Encrypt certificate creation for `autoconfig.<domain>`/`autodiscover.<domain>` (4.4), the node-FQDN Autodiscover path route, disabling a domain (route and, optionally, DNS record removal per 5.5), backup and restore (4.2), and module removal.
+
+### 9.3 Client tests (manual)
+
+Thunderbird (Autoconfig), Outlook (Autodiscover via CNAME and via SRV), Apple Mail (mobileconfig), using a user's primary address and an alias, against the real node set up in 9.2 (not a mocked config) so the actual served XML/plist is what's being tested.
 
 ## 10. Decisions log
 
@@ -280,12 +348,13 @@ The domains table must state clearly, for domains with no dnshelper coverage, th
 | 8 | Protocols in v1: Autoconfig, Autodiscover, mobileconfig (unsigned). |
 | 9 | Image: upstream automx image if published, else built from source; exact tag pinned; Renovate tracks it. |
 | 10 | Minimum NS8 core 3.22.0, to be confirmed. |
+| 11 | Client-facing IMAP and SMTP use implicit TLS on the standard secure ports, IMAPS 993 and SMTPS 465, not STARTTLS/587, unless the mail module explicitly reports different public ports. |
 
 ## 11. VERIFY list (resolve during implementation)
 
-1. Mail module: action that returns the public hostname and ports; `list-domains` output schema; the narrowest role that permits reading them.
+1. Mail module: action that returns the public hostname; `list-domains` output schema; the narrowest role that permits reading them. Client ports/encryption default to IMAPS 993 / SMTPS 465 per the decisions log (4.3) — confirm only whether the mail module ever advertises different public ports that should override that default.
 2. automx: exact LDAP backend keys, variable names and filter syntax in 3.0; whether a local-part placeholder exists; behavior when the LDAP backend fails or finds no entry; compatibility of certificate settings with the plaintext loopback ldapproxy hop.
-3. automx: the exact public paths for Autoconfig, Autodiscover and mobileconfig (from `openapi export`), for the Traefik path allowlist.
+3. automx: the exact public paths for Autoconfig, Autodiscover and mobileconfig (from `openapi export`), for the Traefik path allowlist and for the mobileconfig URL template used by the profile-link snippet (7.1) — specifically the mobileconfig path and its email query parameter name.
 4. Upstream image: registry, tag scheme, availability of the `ldap` extra in the published image.
 5. Traefik: `set-route`/`delete-route` parameters; per-host route naming; coexistence of a path route on the node FQDN with the node's existing routes; behavior of Let's Encrypt when DNS is not yet resolvable.
 6. Default `http2https` for the autoconfig hosts, after real-client tests.
@@ -301,3 +370,4 @@ The domains table must state clearly, for domains with no dnshelper coverage, th
 - Several mail instances and user domains (per-domain sections in `automx.conf`).
 - Mobileconfig signing with a configured certificate.
 - Autodiscover v2, OAuth public-client metadata.
+- True self-service integration into `/users-admin/<domain>/` (ns8-user-manager): today that page only shows a static, non-linked "services" text list configured by the accounts-provider module (samba/openldap), so putting a real download link there needs cross-module work — either that page's "services" entries becoming linkable, or a new registration mechanism other modules can feed. That's a feature request against `ns8-user-manager` (and possibly `ns8-samba`/`ns8-openldap`), not something achievable from within `ns8-automx` alone. Section 7.1's copyable snippet is the v1 substitute: it gives the administrator the same end-user outcome without depending on another module's release.
