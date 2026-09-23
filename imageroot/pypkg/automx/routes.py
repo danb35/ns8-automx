@@ -66,8 +66,21 @@ def domain_route_exists(module_id, domain):
     a transient DNS/dnshelper hiccup on a later reconcile must never delete
     a working route and force Traefik to burn a fresh Let's Encrypt attempt
     for no reason. Checking the autoconfig instance is enough: all of one
-    domain's route instances are created together in set_domain_routes."""
-    return agent.get_route(instance_name(module_id, "autoconfig", domain, 0)) is not None
+    domain's route instances are created together in set_domain_routes.
+
+    PATCH, found live 2026-09-24: agent.get_route() returns {} (falsy, but
+    not None) for a route that doesn't exist -- confirmed against the real
+    SDK by the fact that stub_agent.py already modeled it that way
+    (get_route_result defaults to {}, not None) while this function still
+    used `is not None`, which treats {} as "exists". That silently disabled
+    the DNS gate for every domain, unconditionally, every time: a brand
+    new domain with zero routes was always treated as "already has routes"
+    and skipped straight to creating them regardless of DNS status -- the
+    exact bug this function exists to prevent. get-domains/10read's
+    original pre-refactor check (`if agent.get_route(instance):`) was a
+    plain truthiness test and never had this bug; this is that same test,
+    restored."""
+    return bool(agent.get_route(instance_name(module_id, "autoconfig", domain, 0)))
 
 
 def set_domain_routes(module_id, domain, http2https):
