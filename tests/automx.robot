@@ -49,7 +49,12 @@ Check if set-domains rejects a domain the mail module doesn't have
     Should Not Be Equal As Integers    ${rc}  0
 
 Check if automx service is healthy
-    ${output}  ${rc} =    Execute Command    api-cli run module/${module_id}/get-status --data '{}'
+    # get-status is core's own inherited action; unlike our own actions it
+    # was never given the "accept {} too" treatment (DESIGN.md 6.1), so its
+    # validate-input.json is strictly "type": "null" -- {} fails core's own
+    # schema validation (exit 10, validation-failed) before any of our code
+    # runs. Confirmed via the CI VM journal, 2026-09-23.
+    ${output}  ${rc} =    Execute Command    api-cli run module/${module_id}/get-status --data 'null'
     ...    return_rc=True
     Should Be Equal As Integers    ${rc}  0
 
