@@ -138,5 +138,40 @@ class CompareRecordTests(unittest.TestCase):
         self.assertEqual(status, dns.STATUS_OK)
 
 
+class RoutesReadyTests(unittest.TestCase):
+    # DESIGN.md 5.6: route creation waits for exactly these two records --
+    # the SRV record is irrelevant to Traefik/certs.
+
+    def _status(self, autoconfig, autodiscover, srv=dns.STATUS_MISSING):
+        return {
+            "records": [
+                {"host": "autoconfig.example.com", "type": "CNAME", "status": autoconfig},
+                {"host": "autodiscover.example.com", "type": "CNAME", "status": autodiscover},
+                {"host": "_autodiscover._tcp.example.com", "type": "SRV", "status": srv},
+            ]
+        }
+
+    def test_ready_when_both_cnames_are_ok(self):
+        self.assertTrue(dns.routes_ready(self._status(dns.STATUS_OK, dns.STATUS_OK)))
+
+    def test_not_ready_when_one_cname_is_missing(self):
+        self.assertFalse(dns.routes_ready(self._status(dns.STATUS_OK, dns.STATUS_MISSING)))
+
+    def test_not_ready_when_both_cnames_are_missing(self):
+        self.assertFalse(dns.routes_ready(self._status(dns.STATUS_MISSING, dns.STATUS_MISSING)))
+
+    def test_srv_status_is_irrelevant(self):
+        # Even a conflicting/unknown SRV must not block routes: only the
+        # two CNAMEs matter.
+        self.assertTrue(
+            dns.routes_ready(self._status(dns.STATUS_OK, dns.STATUS_OK, srv=dns.STATUS_CONFLICT))
+        )
+
+    def test_not_ready_on_conflict_or_unknown(self):
+        for status in (dns.STATUS_CONFLICT, dns.STATUS_UNKNOWN, dns.STATUS_NOT_PERMITTED, dns.STATUS_UNMANAGED):
+            with self.subTest(status=status):
+                self.assertFalse(dns.routes_ready(self._status(dns.STATUS_OK, status)))
+
+
 if __name__ == "__main__":
     unittest.main()

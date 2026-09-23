@@ -2,14 +2,21 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "set-domains output",
     "$id": "http://nethserver.org/json-schema/task/output/automx/set-domains",
-    "description": "Domains whose routes could not be fully applied (e.g. DNS not resolvable yet -- DESIGN.md 5.6); an empty list means everything applied cleanly. Call get-domains for full per-record DNS status.",
+    "description": "How each domain's routes came out. route_failures are real Traefik-side failures; waiting_for_dns are domains whose route creation was deliberately skipped because their DNS isn't ready yet (DESIGN.md 5.6) -- reconcile() (via check-dns) will create their routes once it is, no further action needed. Both empty means everything applied cleanly. Call get-domains for full per-record DNS status.",
     "type": "object",
     "required": [
-        "route_failures"
+        "route_failures",
+        "waiting_for_dns"
     ],
     "additionalProperties": false,
     "properties": {
         "route_failures": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "waiting_for_dns": {
             "type": "array",
             "items": {
                 "type": "string"

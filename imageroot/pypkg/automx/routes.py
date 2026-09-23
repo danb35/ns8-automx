@@ -58,6 +58,17 @@ def _set(instance, host, path, http2https):
     return agent.set_route(data, error_passthrough=False)
 
 
+def domain_route_exists(module_id, domain):
+    """True if this domain's routes have already been created. Used to
+    gate first-time route creation on DNS readiness (DESIGN.md 5.6) without
+    re-checking, or tearing down, a domain whose routes already exist --
+    a transient DNS/dnshelper hiccup on a later reconcile must never delete
+    a working route and force Traefik to burn a fresh Let's Encrypt attempt
+    for no reason. Checking the autoconfig instance is enough: all of one
+    domain's route instances are created together in set_domain_routes."""
+    return agent.get_route(instance_name(module_id, "autoconfig", domain, 0)) is not None
+
+
 def set_domain_routes(module_id, domain, http2https):
     """Create/update the autoconfig.<domain> and autodiscover.<domain>
     routes for one enabled domain. Returns a list of (instance, response)

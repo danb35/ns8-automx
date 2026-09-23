@@ -43,6 +43,25 @@ def expected_records(domain, target_fqdn):
     ]
 
 
+def routes_ready(dns_status):
+    """True if the two CNAME records Traefik's routes/certs actually depend
+    on (autoconfig, autodiscover) are both published and correct. The SRV
+    record is irrelevant here -- it's only for Outlook's own SRV discovery,
+    which happens after a client already has a route/cert to talk to.
+
+    This is the gate route creation waits on (DESIGN.md 5.6, 3.4): a route
+    gets exactly one shot at a Let's Encrypt certificate (Traefik's ACME
+    provider only (re-)tries a domain when its dynamic config changes --
+    confirmed by reading traefik/traefik's pkg/provider/acme/provider.go,
+    2026-09-23 -- there is no background poller retrying a domain that
+    never got a cert). Creating the route before DNS resolves burns that
+    one shot on a guaranteed failure and, worse, can exhaust Let's
+    Encrypt's per-hostname failed-authorization rate limit, blocking any
+    real retry for up to an hour even after DNS is fixed -- exactly what
+    happened enabling a domain live, 2026-09-23."""
+    return all(r["status"] == STATUS_OK for r in dns_status["records"] if r["type"] == "CNAME")
+
+
 def dnshelper_relative_name(host, zone):
     """host relative to the dnshelper-managed zone, "@" at the apex.
     A mail domain can be a subdomain of the managed zone (DESIGN.md 5.3.1),

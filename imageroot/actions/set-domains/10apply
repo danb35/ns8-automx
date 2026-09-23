@@ -96,4 +96,10 @@ with reconcile.lock():
 
     result = reconcile.reconcile_locked(rdb)
 
-json.dump({"route_failures": sorted(result["route_failures"].keys())}, fp=sys.stdout)
+json.dump(
+    {
+        "route_failures": sorted(result["route_failures"].keys()),
+        "waiting_for_dns": sorted(result["waiting_for_dns"]),
+    },
+    fp=sys.stdout,
+)

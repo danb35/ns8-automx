@@ -7,12 +7,23 @@
 # plus the shared node-FQDN Autodiscover route, then render + validate +
 # restart automx itself (imageroot/bin/reload-automx).
 #
-# Route creation is attempted for every enabled domain even if its DNS
-# isn't resolvable yet (DESIGN.md 5.6): ns8-traefik has no retry/backoff of
-# its own (3.4), so "wait, then retry automatically" isn't available to us
-# either -- callers surface per-domain failures (e.g. "waiting for DNS")
-# from the returned dict instead, and the admin can re-run set-domains (or
-# a future check-dns-triggered re-apply) once DNS is in place.
+# Route creation for a domain that doesn't have routes yet is gated on a
+# live DNS check first (DESIGN.md 5.6, dns.routes_ready()) -- corrected
+# 2026-09-23, reversing this module's original "create the route regardless,
+# Traefik will keep retrying in the background" assumption. That assumption
+# was wrong: reading traefik/traefik's pkg/provider/acme/provider.go showed
+# Traefik's ACME provider only (re-)attempts a domain when its dynamic
+# config changes, once, with no background retry of a domain that never got
+# a cert -- so creating the route before DNS resolves doesn't just delay
+# the cert, it burns the one shot the domain will ever get until something
+# touches its config again, and can exhaust Let's Encrypt's per-hostname
+# rate limit in the process (confirmed live, 2026-09-23: a domain enabled
+# before its DNS existed hit "too many failed authorizations" within
+# minutes and then sat with no certificate for over an hour, restart of
+# Traefik itself being the only thing that made it try again). A domain
+# skipped here is reported in "waiting_for_dns"; check-dns re-triggers
+# reconcile() once its DNS turns out ready, so there's no need for the
+# admin to separately re-run set-domains once DNS is in place.
 #
 # Six call sites reach reconcile(): set-domains, configure-module,
 # restore-module, and three event handlers (mail-settings-changed,
@@ -58,7 +69,7 @@ import subprocess
 import sys
 from contextlib import contextmanager
 
-from automx import domains, mail, node, routes, state
+from automx import dns, dnshelperclient, dnsstatus, domains, mail, node, routes, state
 
 
 @contextmanager
@@ -79,10 +90,11 @@ def lock():
 def reconcile(rdb):
     """Re-applies routes for all enabled+usable domains and reloads automx.
     Returns {"route_failures": {domain: [(instance, response), ...]},
-    "node_route_failure": (instance, response)|None}. Acquires the shared
-    lock itself -- callers that also need to mutate state/domains.json
-    under the same lock (currently only set-domains/10apply) should use
-    lock() + reconcile_locked() directly instead."""
+    "waiting_for_dns": [domain, ...], "node_route_failure": (instance,
+    response)|None}. Acquires the shared lock itself -- callers that also
+    need to mutate state/domains.json under the same lock (currently only
+    set-domains/10apply) should use lock() + reconcile_locked() directly
+    instead."""
     with lock():
         return reconcile_locked(rdb)
 
@@ -99,16 +111,37 @@ def reconcile_locked(rdb):
 
     enabled_domains = domains.enabled_usable(mail_domain_names, domains_state)
 
+    # Neither is needed at all with zero enabled domains -- get_node_fqdn()
+    # is its own NS8 task RPC, not worth paying for on every reconcile of
+    # an unused instance.
+    target_fqdn = None
+    dnshelper_target = None
+    if enabled_domains:
+        target_fqdn = settings.get("service_host") or node.get_node_fqdn()
+        dnshelper_target = dnshelperclient.find_instance()
+
     route_failures = {}
+    waiting_for_dns = []
     for domain in enabled_domains:
+        # A domain that already has routes keeps them regardless of what a
+        # live DNS check says right now -- never tear down a working route
+        # (and force Traefik to burn a fresh Let's Encrypt attempt) over a
+        # transient dnshelper/resolver hiccup. The DNS gate below only ever
+        # applies to a domain's first route creation (DESIGN.md 5.6, dns.py
+        # routes_ready()).
+        if not routes.domain_route_exists(module_id, domain):
+            dns_status = dnsstatus.domain_dns_status(domain, target_fqdn, dnshelper_target)
+            if not dns.routes_ready(dns_status):
+                waiting_for_dns.append(domain)
+                continue
+
         failures = routes.set_domain_routes(module_id, domain, settings["http2https"])
         if failures:
             route_failures[domain] = failures
 
     node_route_failure = None
     if enabled_domains:
-        node_fqdn = settings.get("service_host") or node.get_node_fqdn()
-        response = routes.set_node_autodiscover_route(module_id, node_fqdn, settings["http2https"])
+        response = routes.set_node_autodiscover_route(module_id, target_fqdn, settings["http2https"])
         if response["exit_code"] != 0:
             node_route_failure = (routes.node_autodiscover_instance(module_id), response)
     else:
@@ -124,6 +157,7 @@ def reconcile_locked(rdb):
 
     return {
         "route_failures": route_failures,
+        "waiting_for_dns": waiting_for_dns,
         "node_route_failure": node_route_failure,
         "reload_failed": reload_result.returncode != 0,
     }

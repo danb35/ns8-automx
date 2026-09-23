@@ -40,7 +40,8 @@
                         "type": "string",
                         "enum": [
                             "configured",
-                            "not_configured"
+                            "not_configured",
+                            "waiting_for_dns"
                         ]
                     },
                     "dns": {

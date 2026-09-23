@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
 
 import agent
-from automx import dnshelperclient, dnsstatus, domains as domains_lib, mail, node, routes, state
+from automx import dns, dnshelperclient, dnsstatus, domains as domains_lib, mail, node, routes, state
 
 rdb = agent.redis_connect(use_replica=True)
 
@@ -30,17 +30,20 @@ module_id = os.environ["MODULE_ID"]
 
 domains_out = []
 for entry in domains_lib.merge(mail_domain_names, domains_state):
+    dns_status = dnsstatus.domain_dns_status(entry["domain"], target_fqdn, dnshelper_target)
+
     route_status = "not_configured"
     if entry["enabled"] and not entry["orphaned"]:
-        autoconfig_instance = routes.instance_name(module_id, "autoconfig", entry["domain"], 0)
-        if agent.get_route(autoconfig_instance):
+        if routes.domain_route_exists(module_id, entry["domain"]):
             route_status = "configured"
+        elif not dns.routes_ready(dns_status):
+            route_status = "waiting_for_dns"
 
     domains_out.append(
         {
             **entry,
             "route_status": route_status,
-            "dns": dnsstatus.domain_dns_status(entry["domain"], target_fqdn, dnshelper_target),
+            "dns": dns_status,
         }
     )
 
