@@ -80,7 +80,7 @@
               >
                 <cv-data-table-cell>
                   <strong>{{ row.domain }}</strong>
-                  <cv-tag
+                  <NsTag
                     v-if="row.orphaned"
                     :label="$t('domains.orphaned')"
                     kind="warm-gray"
@@ -111,13 +111,13 @@
                   </div>
                 </cv-data-table-cell>
                 <cv-data-table-cell>
-                  <cv-tag
+                  <NsTag
                     :label="$t('domains.dns_status_' + row.dnsSummary)"
                     :kind="dnsTagKind(row.dnsSummary)"
                   />
                 </cv-data-table-cell>
                 <cv-data-table-cell>
-                  <cv-tag
+                  <NsTag
                     :label="
                       $t(
                         row.enabled

@@ -21,7 +21,7 @@
     </cv-row>
     <cv-row>
       <cv-column>
-        <cv-tile light>
+        <NsTile light>
           <cv-form @submit.prevent="configureModule">
             <NsTextInput
               :label="$t('settings.service_host')"
@@ -89,7 +89,7 @@
               >{{ $t("settings.save") }}</NsButton
             >
           </cv-form>
-        </cv-tile>
+        </NsTile>
       </cv-column>
     </cv-row>
   </cv-grid>

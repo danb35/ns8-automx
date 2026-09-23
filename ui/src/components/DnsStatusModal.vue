@@ -80,13 +80,13 @@
                 record.host
               }}</cv-structured-list-data>
               <cv-structured-list-data
-                ><cv-tag :label="record.type" kind="blue"
+                ><NsTag :label="record.type" kind="blue"
               /></cv-structured-list-data>
               <cv-structured-list-data class="break-word">{{
                 record.value
               }}</cv-structured-list-data>
               <cv-structured-list-data>
-                <cv-tag
+                <NsTag
                   :label="$t('domains.dns_status_' + record.status)"
                   :kind="statusKind(record.status)"
                 />
