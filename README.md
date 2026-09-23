@@ -7,153 +7,192 @@ Microsoft Autodiscover, Apple Mail via an unsigned `.mobileconfig` profile) disc
 IMAP and SMTP settings of the NS8 mail server on their own, with the correct login name
 and display name looked up from the domain's accounts provider (OpenLDAP or Samba AD).
 
-See [DESIGN.md](DESIGN.md) for the full design, including scope, the NS8 platform facts
-it depends on, and the DNS records (`autoconfig.<domain>`, `autodiscover.<domain>`,
-`_autodiscover._tcp.<domain>`) it manages directly through
-[ns8-dnshelper](https://github.com/danb35/ns8-dnshelper) when available.
+**Administering it?** The [user guide](docs/USER-GUIDE.md) explains enabling domains,
+publishing their DNS records (with or without dnshelper), settings, and sharing a
+download link with your users. This README is for people who build, test or work on the
+module itself.
 
-> This repository was generated from the
-> [ns8-kickstart](https://github.com/NethServer/ns8-kickstart) template; the sections
-> below (Install/Configure/Debug) still describe the template's placeholder actions and
-> will be rewritten as the module's own actions land.
+See [DESIGN.md](DESIGN.md) for the full design, including the NS8 platform facts it
+depends on, why it uses automx's `script` LDAP backend instead of the native one, and the
+findings from testing it against real NS8 nodes.
+
+## Status
+
+Every step of [DESIGN.md](DESIGN.md)'s design is implemented and has been exercised on
+real NS8 nodes, across six separate real-node passes: the core autoconfig/Autodiscover/
+mobileconfig path against both OpenLDAP (`rfc2307`) and Samba AD (`ad`) accounts
+providers; the manual (resolver-based) and dnshelper-backed DNS flows, including
+`not_permitted`, `conflict`, `unmanaged`, create, overwrite and the dnshelper-coverage-
+added-later ordering case; alias-address fallback; the LDAP-unreachable fallback; Traefik
+route and certificate creation; disabling a domain; backup and restore into a new
+instance; and module removal. A final pass reran the whole stack (accounts provider,
+mail, automx, dnshelper) from scratch on a freshly reverted node with no new findings.
+See DESIGN.md section 9 for the detailed log of what was tested and what each real-node
+pass found and fixed.
+
+Not yet done: `tests/integration/`'s scenario matrix is written but has not been run as
+an automated, re-runnable suite (everything in it has been exercised manually instead,
+across the passes above); and real client testing (an actual Thunderbird, Outlook and
+Apple Mail, not just the raw HTTP responses) is still outstanding, which is also what
+blocks a final decision on the `http2https` default (DESIGN.md VERIFY item 6).
+
+Not in scope for v1: PACC, Autodiscover v2, several mail instances at once, resolving
+mail aliases to a login, and mobileconfig signing. See DESIGN.md section 2 and 12.
 
 ## Install
 
 Instantiate the module with:
 
-    add-module ghcr.io/nethserver/kickstart:latest 1
+    add-module ghcr.io/danb35/automx:latest 1
 
-The output of the command will return the instance name.
-Output example:
+The output of the command returns the instance name:
 
-    {"module_id": "kickstart1", "image_name": "kickstart", "image_url": "ghcr.io/nethserver/kickstart:latest"}
+    {"module_id": "automx1", "image_name": "automx", "image_url": "ghcr.io/danb35/automx:latest"}
 
-## Configure
+To install a particular release instead of the newest build, use its tag in place of
+`latest`, for example `ghcr.io/danb35/automx:0.1.0`.
 
-Let's assume that the mattermost instance is named `kickstart1`.
+Then open the module's page in the NS8 admin UI, or see the
+[user guide](docs/USER-GUIDE.md) for the full walkthrough.
 
-Launch `configure-module`, by setting the following parameters:
-- `host`: a fully qualified domain name for the application
-- `http2https`: enable or disable HTTP to HTTPS redirection (true/false)
-- `lets_encrypt`: enable or disable Let's Encrypt certificate (true/false)
+## Actions
 
+Each action has `validate-input.json` and `validate-output.json` under
+`imageroot/actions/<action>/`. Schemas accept `null` as well as `{}` for the
+argument-less ones, since the admin UI sends no payload.
 
-Example:
+| Action | Purpose |
+|---|---|
+| `configure-module` | Settings: service host override (default: this node's own FQDN), `http2https` default, `display_names` toggle. Starts the service once at least one domain is enabled. |
+| `get-configuration` | Settings plus a summary (enabled domain count, mail hostname, user domain, dnshelper presence) for the Status page. |
+| `get-domains` | The mail module's domains merged with the module's own enable/disable state: enabled flag, route status, DNS status per record, orphan flag. |
+| `set-domains` | Enable or disable one or more domains; applies Traefik routes, renders `automx.conf`, validates it, reloads the service. |
+| `check-dns` | Recompute DNS status for one domain (dnshelper path if it covers the zone, resolver path otherwise). |
+| `apply-dns` | For one domain: `create` (missing records) or `overwrite` (conflicting ones), each after a `dry_run` preview. dnshelper only. |
+| `get-dns-plan` | The exact records to create, for the manual (no-dnshelper) path. |
+| `get-dnshelper-status` | Whether dnshelper is present and, per domain, whether its zone is managed and whether this module is allowed to change it — what the UI needs to say exactly what's missing. |
+| `get-profile-link` | For one enabled domain: automx's own unauthenticated mobileconfig form URL and a ready-to-embed HTML snippet. No state change, no call to automx itself. |
 
-```
-api-cli run configure-module --agent module/kickstart1 --data - <<EOF
-{
-  "host": "kickstart.domain.com",
-  "http2https": true,
-  "lets_encrypt": false
-}
-EOF
-```
+## How it fits together
 
-The above command will:
-- start and configure the kickstart instance
-- configure a virtual host for trafik to access the instance
+- **Mail domains and users**: `automx.conf` is rendered from the mail module's own
+  domains and hostname (`mail@any:mailadm`, the only consumer role ns8-mail offers —
+  broader than needed, but automx never calls the credential/BCC/relay actions it also
+  grants) and from the domain's LDAP/AD parameters via `agent.ldapproxy.Ldapproxy()`
+  (`cluster:accountconsumer`). See DESIGN.md 3.1–3.3.
+- **Login/display-name lookup** does not use automx's native `backend = ldap`: it cannot
+  express "match the login attribute against the local part, else match `mail` against
+  the full address" in a single filter, and it hard-fails instead of falling back on a
+  miss. `imageroot/bin/automx-ldap-lookup`, invoked through automx's `script` backend,
+  does the two-step lookup itself and always exits 0 with a fallback (the bare address,
+  no display name) on a miss or an unreachable directory. See DESIGN.md 3.3.
+- **Traefik routes** (`traefik@node:routeadm`) publish `autoconfig.<domain>` and
+  `autodiscover.<domain>` for each enabled domain, plus one route on the node's own FQDN
+  restricted to the Autodiscover path (SRV records point there). See DESIGN.md 3.4/4.4.
+- **DNS records** (`autoconfig.<domain>`, `autodiscover.<domain>`,
+  `_autodiscover._tcp.<domain>`) are managed directly through
+  [ns8-dnshelper](https://github.com/danb35/ns8-dnshelper)
+  (`dnshelper@cluster:dnswriter`) when it is present and covers the zone, or shown as
+  copyable instructions otherwise. See [Using dnshelper](#using-dnshelper) below and
+  DESIGN.md section 5.
 
-## Get the configuration
-You can retrieve the configuration with
+## Using dnshelper
 
-```
-api-cli run get-configuration --agent module/kickstart1
-```
+dnshelper is optional. If it isn't installed, `get-domains`/`check-dns` resolve the
+records from a public DNS server instead and the UI shows what to create by hand.
 
-## Uninstall
+If it is installed, this module still starts out with **no access**: dnshelper denies
+every module everything until an administrator adds a rule for it. Add one on
+dnshelper's own Access page, or with `set-policy`:
 
-To uninstall the instance:
-
-    remove-module --no-preserve kickstart1
-
-## Smarthost setting discovery
-
-Some configuration settings, like the smarthost setup, are not part of the
-`configure-module` action input: they are discovered by looking at some
-Redis keys.  To ensure the module is always up-to-date with the
-centralized [smarthost
-setup](https://nethserver.github.io/ns8-core/core/smarthost/) every time
-kickstart starts, the command `bin/discover-smarthost` runs and refreshes
-the `state/smarthost.env` file with fresh values from Redis.
-
-Furthermore if smarthost setup is changed when kickstart is already
-running, the event handler `events/smarthost-changed/10reload_services`
-restarts the main module service.
-
-See also the `systemd/user/kickstart.service` file.
-
-This setting discovery is just an example to understand how the module is
-expected to work: it can be rewritten or discarded completely.
-
-## Debug
-
-some CLI are needed to debug
-
-- The module runs under an agent that initiate a lot of environment variables (in /home/kickstart1/.config/state), it could be nice to verify them
-on the root terminal
-
-    `runagent -m kickstart1 env`
-
-- you can become runagent for testing scripts and initiate all environment variables
-  
-    `runagent -m kickstart1`
-
- the path become : 
-```
-    echo $PATH
-    /home/kickstart1/.config/bin:/usr/local/agent/pyenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/usr/
+```json
+{"caller": "module/automx1", "zones": ["example.com"], "access": "write",
+ "names": ["autoconfig", "autoconfig.*", "autodiscover", "autodiscover.*",
+           "_autodiscover._tcp", "_autodiscover._tcp.*"],
+ "types": ["CNAME", "SRV"]}
 ```
 
-- if you want to debug a container or see environment inside
- `runagent -m kickstart1`
- ```
-podman ps
-CONTAINER ID  IMAGE                                      COMMAND               CREATED        STATUS        PORTS                    NAMES
-d292c6ff28e9  localhost/podman-pause:4.6.1-1702418000                          9 minutes ago  Up 9 minutes  127.0.0.1:20015->80/tcp  80b8de25945f-infra
-d8df02bf6f4a  docker.io/library/mariadb:10.11.5          --character-set-s...  9 minutes ago  Up 9 minutes  127.0.0.1:20015->80/tcp  mariadb-app
-9e58e5bd676f  docker.io/library/nginx:stable-alpine3.17  nginx -g daemon o...  9 minutes ago  Up 9 minutes  127.0.0.1:20015->80/tcp  kickstart-app
+(Replace `module/automx1` with this module's actual instance id, and list the zones
+dnshelper should let it manage — `["*"]` for all of them.) The Domains page's DNS status
+dialog shows this same suggested rule, with the real zone name filled in, whenever a
+domain's zone is managed by dnshelper but not yet covered by a rule.
+
+That rule only covers *creating* CNAME/SRV records or replacing a same-type CNAME/SRV
+value. **Overwriting a record of a different type** (for example, an existing A record
+where automx wants a CNAME) additionally needs a rule that also allows the conflicting
+type at the same names — add it, or `types: ["*"]`, if you expect that case. See
+DESIGN.md 5.3.6.
+
+Access is re-checked live on every `get-domains`/`check-dns` call, not cached — so
+installing dnshelper (or adding zone coverage, or granting the rule) after this module
+was already configured takes effect immediately, with no need to disable and re-enable
+the domain. Confirmed on a real node; see DESIGN.md section 9.
+
+## Backup and restore
+
+**What is backed up** (`imageroot/etc/state-include.conf`): `state/domains.json` (the
+enable/disable flag per domain) and `state/settings.json`. `automx.conf` itself is not
+backed up — it's a pure function of these two files plus live discovery data (mail
+domains, LDAP parameters), regenerated on every service start, and it contains the LDAP
+bind password.
+
+Restore re-runs the renderer, re-creates Traefik routes and DNS status, and tolerates
+the mail module or accounts provider not being present yet. It has been exercised on a
+real node: back up, restore into a *new* instance (not overwriting the original), and
+confirm the restored instance's service, domain state, settings and actual autoconfig
+responses are all correct — see DESIGN.md section 9 for the details.
+
+## Admin UI
+
+Vue 2 with Carbon and `ns8-ui-lib`, in `ui/`. Four pages besides About: Status, Domains
+(the DNS status dialog and the profile-link dialog live here), and Settings. See the
+[user guide](docs/USER-GUIDE.md) for what each one does.
+
+```bash
+cd ui && yarn install && yarn build
 ```
 
-you can see what environment variable is inside the container
+## Development
+
+Agent guidance for this repository is in [AGENTS.md](AGENTS.md), [AGENTS-backend.md](AGENTS-backend.md)
+and [AGENTS-frontend.md](AGENTS-frontend.md); read the matching one before working in
+`imageroot/` or `ui/`. Consuming dnshelper from this module's own code follows the
+contract in `ns8-dnshelper`'s own README, checked out alongside this repository — see
+`CLAUDE.md` for the exact path convention this repository expects.
+
+The automx application itself is built from source in `build-images.sh`, pinned to a
+specific upstream tag: the published `ghcr.io/croessner/automx` image never installs
+automx's own `ldap` extra, so it can't be used as-is. See DESIGN.md 4.5 for why, and for
+what was confirmed by actually building and running the resulting image locally.
+
+## Testing on a node
+
+`tests/integration/` follows `ns8-dnshelper`'s own `tests/integration/` structure: a
+re-runnable script against a real node. Unlike dnshelper's version, it does not set up
+the mail domain or accounts provider itself — see `tests/integration/README.md` for what
+the node must already have. Its scenario matrix has not yet been run end to end as an
+automated suite; every scenario in it has instead been exercised manually across six
+real-node passes recorded in DESIGN.md section 9.
+
+The Robot suite in `tests/` is the smoke test CI runs (`test-module.sh`):
+
+```bash
+./test-module.sh <NODE_ADDR> ghcr.io/danb35/automx:latest
 ```
-podman exec  kickstart-app env
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-TERM=xterm
-PKG_RELEASE=1
-MARIADB_DB_HOST=127.0.0.1
-MARIADB_DB_NAME=kickstart
-MARIADB_IMAGE=docker.io/mariadb:10.11.5
-MARIADB_DB_TYPE=mysql
-container=podman
-NGINX_VERSION=1.24.0
-NJS_VERSION=0.7.12
-MARIADB_DB_USER=kickstart
-MARIADB_DB_PASSWORD=kickstart
-MARIADB_DB_PORT=3306
-HOME=/root
-```
 
-you can run a shell inside the container
-
-```
-podman exec -ti   kickstart-app sh
-/ # 
-```
-## Testing
-
-Test the module using the `test-module.sh` script:
-
-
-    ./test-module.sh <NODE_ADDR> ghcr.io/nethserver/kickstart:latest
-
-The tests are made using [Robot Framework](https://robotframework.org/)
+It runs on a throwaway CI node with no mail module present, so it confirms
+`set-domains` degrades cleanly (a `validation-failed` on an unknown domain, not a crash)
+rather than exercising the full enable-a-domain path, which needs the real infrastructure
+`tests/integration/` and the manual passes in DESIGN.md cover instead.
 
 ## UI translation
 
-Translated with [Weblate](https://hosted.weblate.org/projects/ns8/).
+Translated with [Weblate](https://hosted.weblate.org/projects/ns8/). English is the
+source language in `ui/public/i18n/en/translation.json`.
 
-To setup the translation process:
+To set up the translation process:
 
-- add [GitHub Weblate app](https://docs.weblate.org/en/latest/admin/continuous.html#github-setup) to your repository
-- add your repository to [hosted.weblate.org]((https://hosted.weblate.org) or ask a NethServer developer to add it to ns8 Weblate project
+- add the [GitHub Weblate app](https://docs.weblate.org/en/latest/admin/continuous.html#github-setup)
+  to your repository
+- add your repository to [hosted.weblate.org](https://hosted.weblate.org) or ask a
+  NethServer developer to add it to the ns8 Weblate project
