@@ -35,6 +35,7 @@
     "no_domains_description": "No domains were found on the configured mail instance.",
     "orphaned": "Orphaned",
     "enabled": "Enabled",
+    "updating": "Updating… this can take up to a minute",
     "get_profile_link": "Get profile link",
     "dns_status": "DNS status",
     "col_domain": "Domain",
@@ -49,11 +50,14 @@
     "dns_status_unknown": "Unknown",
     "route_status_configured": "Configured",
     "route_status_not_configured": "Not configured",
+    "route_status_waiting_for_dns": "Waiting for DNS",
     "route_status_not_applicable": "-",
     "dnshelper_absent_title": "dnshelper is not installed",
     "dnshelper_absent_description": "DNS records for enabled domains must be created manually. Install ns8-dnshelper to manage them from here.",
     "waiting_for_dns_title": "Waiting for DNS",
-    "waiting_for_dns_description": "The route for {domain} could not be fully set up yet, likely because its DNS records don't resolve to this node. Check the DNS status and try again once they do.",
+    "waiting_for_dns_description": "The route for {domain} hasn't been set up yet because its DNS records don't resolve to this node. It will be created automatically once they do -- open the DNS status dialog to see what's needed, or to check again.",
+    "route_failure_title": "Route could not be created",
+    "route_failure_description": "The Traefik route for {domain} could not be created. Check the module's logs for details.",
     "add_first_domain": "Enable your first domain"
   },
   "dns_status": {

@@ -88,17 +88,27 @@
                   />
                 </cv-data-table-cell>
                 <cv-data-table-cell>
-                  <NsToggle
-                    :value="'enabled-' + row.domain"
-                    :checked="row.enabled"
-                    @change="toggleDomain(row)"
-                    :disabled="
-                      loading.toggle === row.domain ||
-                      (row.orphaned && !row.enabled)
-                    "
-                    hideLabel
-                    :label="$t('domains.enabled')"
-                  />
+                  <div class="toggle-with-loading">
+                    <NsToggle
+                      :value="'enabled-' + row.domain"
+                      :checked="row.enabled"
+                      @change="toggleDomain(row)"
+                      :disabled="
+                        loading.toggle === row.domain ||
+                        (row.orphaned && !row.enabled)
+                      "
+                      hideLabel
+                      :label="$t('domains.enabled')"
+                    />
+                    <cv-loading
+                      v-if="loading.toggle === row.domain"
+                      small
+                      :active="true"
+                      :overlay="false"
+                      :description="$t('domains.updating')"
+                      class="mg-left-sm"
+                    />
+                  </div>
                 </cv-data-table-cell>
                 <cv-data-table-cell>
                   <cv-tag
@@ -115,11 +125,7 @@
                           : 'domains.route_status_not_applicable'
                       )
                     "
-                    :kind="
-                      row.enabled && row.route_status === 'configured'
-                        ? 'green'
-                        : 'gray'
-                    "
+                    :kind="row.enabled ? routeTagKind(row.route_status) : 'gray'"
                   />
                 </cv-data-table-cell>
                 <cv-data-table-cell class="table-overflow-menu-cell">
@@ -273,6 +279,15 @@ export default {
         }[status] || "gray"
       );
     },
+    routeTagKind(status) {
+      return (
+        {
+          configured: "green",
+          waiting_for_dns: "cyan",
+          not_configured: "gray",
+        }[status] || "gray"
+      );
+    },
     say(kind, title, text) {
       this.notice = { kind, title, text };
     },
@@ -282,11 +297,19 @@ export default {
         const out = await this.callAction("set-domains", {
           data: { domains: { [row.domain]: { enabled: !row.enabled } } },
         });
-        if (out.route_failures.includes(row.domain)) {
+        if (out.waiting_for_dns.includes(row.domain)) {
           this.say(
             "warning",
             this.$t("domains.waiting_for_dns_title"),
             this.$t("domains.waiting_for_dns_description", {
+              domain: row.domain,
+            })
+          );
+        } else if (out.route_failures.includes(row.domain)) {
+          this.say(
+            "error",
+            this.$t("domains.route_failure_title"),
+            this.$t("domains.route_failure_description", {
               domain: row.domain,
             })
           );
@@ -315,5 +338,10 @@ export default {
 .section-intro {
   margin-bottom: $spacing-05;
   max-width: 50rem;
+}
+
+.toggle-with-loading {
+  display: flex;
+  align-items: center;
 }
 </style>

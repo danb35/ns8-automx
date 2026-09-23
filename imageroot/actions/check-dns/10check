@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
 
 import agent
-from automx import dnshelperclient, dnsstatus, node, state
+from automx import dns, dnshelperclient, dnsstatus, node, reconcile, routes, state
 
 data = json.load(sys.stdin) or {}
 
@@ -31,5 +31,26 @@ results = [
     {"domain": domain, "dns": dnsstatus.domain_dns_status(domain, target_fqdn, dnshelper_target)}
     for domain in target_domains
 ]
+
+# A domain's route creation is deliberately skipped while its DNS isn't
+# ready (DESIGN.md 5.6, reconcile.py); check-dns is the one action that's
+# guaranteed to run whenever the admin has a reason to think DNS might be
+# ready now -- opening the DNS status dialog, clicking "check again", or
+# automatically after a dnshelper "create" (DnsStatusModal.confirm() calls
+# check-dns right after apply-dns). So it's the natural place to close the
+# loop and actually create those routes, rather than requiring a separate
+# admin action once DNS catches up. Only bother with the (20-45s) reconcile
+# when something here could plausibly need it -- most check-dns calls
+# change nothing and shouldn't pay for it.
+module_id = os.environ["MODULE_ID"]
+newly_ready = any(
+    domains_state.get(result["domain"], {}).get("enabled")
+    and dns.routes_ready(result["dns"])
+    and not routes.domain_route_exists(module_id, result["domain"])
+    for result in results
+)
+if newly_ready:
+    rdb = agent.redis_connect(use_replica=True)
+    reconcile.reconcile(rdb)
 
 json.dump({"results": results}, fp=sys.stdout)

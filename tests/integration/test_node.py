@@ -143,10 +143,11 @@ class NodeIntegration(unittest.TestCase):
         cls = type(self)
         rc, out = api(cls.automx, 'set-domains', {'domains': {MAIL_DOMAIN: {'enabled': True}}})
         self.assertEqual(rc, 0)
-        if out['route_failures']:
+        self.assertEqual(out['route_failures'], [], 'a real route-creation failure, not a DNS wait')
+        if out['waiting_for_dns']:
             self.skipTest(
-                'route creation reported %r as waiting for DNS (DESIGN.md 5.6) -- point '
-                'autoconfig./autodiscover.%s at this node to test route creation' % (out['route_failures'], MAIL_DOMAIN)
+                'route creation for %r deliberately skipped, DNS not ready yet (DESIGN.md 5.6) -- point '
+                'autoconfig./autodiscover.%s at this node to test route creation' % (out['waiting_for_dns'], MAIL_DOMAIN)
             )
 
         rc, status = api(cls.automx, 'get-status', {})
