@@ -30,11 +30,21 @@ mail, automx, dnshelper) from scratch on a freshly reverted node with no new fin
 See DESIGN.md section 9 for the detailed log of what was tested and what each real-node
 pass found and fixed.
 
+A seventh pass, against a real internet-accessible node with a real public domain and a
+real Let's Encrypt CA, found and fixed two real issues that the earlier LAN-only passes
+couldn't have surfaced: an SRV-record bug in ns8-dnshelper's Cloudflare provider (fixed
+upstream, released as dnshelper 0.2.1), and a design flaw where a domain's Traefik routes
+were created before its DNS existed, permanently losing their one shot at a Let's Encrypt
+certificate. Routes are now deliberately held back until DNS is ready (DESIGN.md 5.6).
+
+Real client testing is done: Betterbird (a Thunderbird fork, Autoconfig), Outlook LTSC
+(Autodiscover) and Apple Mail on macOS (`.mobileconfig`) have all been confirmed working
+against the live node. This also resolved the `http2https` default (DESIGN.md VERIFY item
+6): kept at its default `true`, since no client needed a plain-HTTP fallback.
+
 Not yet done: `tests/integration/`'s scenario matrix is written but has not been run as
 an automated, re-runnable suite (everything in it has been exercised manually instead,
-across the passes above); and real client testing (an actual Thunderbird, Outlook and
-Apple Mail, not just the raw HTTP responses) is still outstanding, which is also what
-blocks a final decision on the `http2https` default (DESIGN.md VERIFY item 6).
+across the passes above).
 
 Not in scope for v1: PACC, Autodiscover v2, several mail instances at once, resolving
 mail aliases to a login, and mobileconfig signing. See DESIGN.md section 2 and 12.
