@@ -1,35 +1,157 @@
 {
-    "common": {
-        "required": "Obrigatório",
-        "work_in_progress": "Em progresso",
-        "processing": "Procesando..."
-    },
-    "status": {
-        "services": "Serviço | Serviços",
-        "app_instance": "Instância do aplicativo",
-        "title": "Estado"
-    },
-    "error": {
-        "403": "Operation not authorized",
-        "401": "Invalid authentication",
-        "generic_error": "Something went wrong",
-        "error": "Error",
-        "network_timeout": "Network timeout",
-        "404": "Resource not found",
-        "network_error": "Network error",
-        "validation_error": "Validation error"
-    },
-    "about": {
-        "title": "About"
-    },
-    "action": {
-        "list-backup-repositories": "List backup repositories",
-        "list-backups": "List backups"
-    },
-    "task": {
-        "cannot_create_task": "Cannot create task {action}"
-    },
-    "settings": {
-        "title": "Settings"
-    }
+  "common": {
+    "required": "Obrigatório",
+    "work_in_progress": "Em andamento",
+    "processing": "Processando…"
+  },
+  "status": {
+    "title": "Status",
+    "app_instance": "Instância do app",
+    "services": "Serviço | Serviços",
+    "app_images": "Imagem do app | Imagens do app",
+    "app_volumes": "Volume do app | Volumes do app",
+    "installation_node": "Nó de instalação",
+    "node": "Nó",
+    "name": "Nome",
+    "size": "Tamanho",
+    "created": "Criado",
+    "mount": "Ponto de montagem",
+    "no_services": "Nenhum serviço",
+    "no_images": "Nenhuma imagem",
+    "no_volumes": "Nenhum volume",
+    "enabled_domains": "Nenhum domínio habilitado | {n} domínio habilitado | {n} domínios habilitados",
+    "manage_domains": "Gerenciar domínios",
+    "mail_hostname": "Servidor de e-mail",
+    "user_domain": "Domínio de usuários",
+    "dnshelper": "DNS helper",
+    "dnshelper_present": "Presente",
+    "dnshelper_absent": "Ausente"
+  },
+  "domains": {
+    "title": "Domínios",
+    "intro": "Habilite a configuração automática de clientes de e-mail para um ou mais dos seus domínios de e-mail. Domínios recém-detectados ficam desabilitados por padrão.",
+    "cannot_load": "Não foi possível carregar os domínios",
+    "no_domains": "Nenhum domínio de e-mail",
+    "no_domains_description": "Nenhum domínio foi encontrado na instância de e-mail configurada.",
+    "orphaned": "Órfão",
+    "enabled": "Habilitado",
+    "updating": "Atualizando… isso pode levar até um minuto",
+    "get_profile_link": "Obter link do perfil",
+    "dns_status": "Status do DNS",
+    "col_domain": "Domínio",
+    "col_enabled": "Habilitado",
+    "col_dns_status": "Status do DNS",
+    "col_route_status": "Rota",
+    "dns_status_ok": "OK",
+    "dns_status_missing": "Ausente",
+    "dns_status_conflict": "Conflito",
+    "dns_status_unmanaged": "Manual",
+    "dns_status_not_permitted": "Não permitido",
+    "dns_status_unknown": "Desconhecido",
+    "route_status_configured": "Configurada",
+    "route_status_not_configured": "Não configurada",
+    "route_status_waiting_for_dns": "Aguardando DNS",
+    "route_status_not_applicable": "–",
+    "dnshelper_absent_title": "O dnshelper não está instalado",
+    "dnshelper_absent_description": "Os registros DNS dos domínios habilitados precisam ser criados manualmente. Instale o ns8-dnshelper para gerenciá-los a partir daqui.",
+    "waiting_for_dns_title": "Aguardando DNS",
+    "waiting_for_dns_description": "A rota para {domain} ainda não foi configurada porque seus registros DNS não resolvem para este nó. Ela será criada automaticamente assim que isso acontecer -- abra a caixa de diálogo de status do DNS para ver o que é necessário, ou para verificar novamente.",
+    "route_failure_title": "Não foi possível criar a rota",
+    "route_failure_description": "Não foi possível criar a rota do Traefik para {domain}. Verifique os logs do módulo para mais detalhes.",
+    "add_first_domain": "Habilite seu primeiro domínio"
+  },
+  "dns_status": {
+    "title": "Status do DNS para {domain}",
+    "col_record": "Registro",
+    "col_type": "Tipo",
+    "col_value": "Valor",
+    "col_status": "Status",
+    "check_again": "Verificar novamente",
+    "manual_title": "O DNS deste domínio não é gerenciado pelo dnshelper",
+    "manual_description": "Crie os registros abaixo no seu provedor de DNS e verifique novamente.",
+    "not_permitted_title": "O dnshelper não tem uma regra de acesso para esta zona",
+    "not_permitted_description": "O dnshelper gerencia a zona {zone}, mas este módulo não tem uma regra para alterá-la. Peça a um administrador para adicionar uma na página de Acesso do dnshelper.",
+    "suggested_rule": "Regra sugerida:",
+    "records_to_create": "Registros a criar",
+    "create": "Criar registros ausentes",
+    "overwrite": "Sobrescrever registros em conflito",
+    "confirm": "Confirmar",
+    "preview_title": "Isso vai alterar:",
+    "preview_nothing": "Nada para alterar."
+  },
+  "profile_link": {
+    "title": "Link de perfil para {domain}",
+    "intro": "Compartilhe isso com seus usuários para que possam baixar a configuração do cliente de e-mail, ou incorpore o trecho abaixo em uma página que você controla.",
+    "url": "Link direto",
+    "snippet_title": "Formulário HTML incorporável",
+    "snippet_description": "Um formulário autônomo, sem JS ou CSS externos. Cole-o como está em uma página que você controla.",
+    "no_auth_title": "Sem autenticação",
+    "no_auth_description": "Este link e este formulário não são autenticados por design, assim como os próprios protocolos de configuração automática: qualquer pessoa que conheça um endereço pode solicitar suas configurações de e-mail."
+  },
+  "settings": {
+    "title": "Configurações",
+    "configure_instance": "Configurar {instance}",
+    "save": "Salvar",
+    "service_host": "Host do serviço (FQDN)",
+    "service_host_help": "Destino do CNAME/SRV e host do Autodiscover. Deixe em branco para usar o FQDN próprio deste nó.",
+    "http_to_https": "Redirecionar HTTP para HTTPS",
+    "display_names": "Incluir nomes de exibição",
+    "display_names_tooltip": "Obtido do LDAP para o endereço perguntado por um cliente.",
+    "display_names_notice_title": "Divulgação não autenticada",
+    "display_names_notice_description": "Os endpoints de configuração automática respondem a qualquer solicitação, sem senha. Com esta opção ativada, um nome de exibição é incluído para o endereço consultado, junto com os nomes do servidor de e-mail. Desative para reduzir o que uma solicitação anônima revela, ao custo de os clientes mostrarem o endereço bruto em vez de um nome.",
+    "enabled": "Habilitado",
+    "disabled": "Desabilitado",
+    "configuring": "Configurando"
+  },
+  "about": {
+    "title": "Sobre"
+  },
+  "task": {
+    "cannot_create_task": "Não foi possível criar a tarefa {action}"
+  },
+  "action": {
+    "get-status": "Obter status",
+    "get-configuration": "Obter configuração",
+    "configure-module": "Configurar módulo",
+    "get-module-info": "Obter informações do módulo",
+    "get-name": "Obter nome",
+    "list-backup-repositories": "Listar repositórios de backup",
+    "list-backups": "Listar backups",
+    "list-installed-modules": "Listar módulos instalados",
+    "get-domains": "Obter domínios",
+    "set-domains": "Atualizar domínios",
+    "check-dns": "Verificar DNS",
+    "apply-dns": "Atualizar registros DNS",
+    "get-dns-plan": "Obter plano de DNS",
+    "get-dnshelper-status": "Obter status do dnshelper",
+    "get-profile-link": "Obter link do perfil"
+  },
+  "error": {
+    "error": "Erro",
+    "generic_error": "Algo deu errado",
+    "validation_error": "Erro de validação",
+    "network_error": "Erro de rede",
+    "network_timeout": "Tempo limite de rede excedido",
+    "401": "Autenticação inválida",
+    "403": "Operação não autorizada",
+    "404": "Recurso não encontrado",
+    "cannot_retrieve_module_info": "Não foi possível obter as informações do módulo",
+    "cannot_retrieve_installed_modules": "Não foi possível obter os módulos instalados",
+    "cannot_retrieve_configuration": "Não foi possível obter a configuração"
+  },
+  "dns_error": {
+    "domain_not_found": "Não é um domínio da instância de e-mail configurada",
+    "domain_not_enabled": "Este domínio não está habilitado",
+    "dnshelper_absent": "O dnshelper não está instalado",
+    "zone_unmanaged": "O dnshelper não gerencia a zona deste domínio",
+    "zone_not_permitted": "O dnshelper não tem uma regra de acesso para esta zona",
+    "not_permitted": "Não permitido",
+    "zone_not_found": "Zona não encontrada",
+    "conflict": "Registro em conflito",
+    "forbidden": "Proibido",
+    "auth_failed": "Falha na autenticação com o provedor de DNS",
+    "unsupported": "Não suportado por este provedor de DNS",
+    "invalid_request": "Solicitação inválida",
+    "unknown_provider": "Provedor de DNS desconhecido"
+  }
 }

@@ -197,10 +197,14 @@ rather than exercising the full enable-a-domain path, which needs the real infra
 
 ## UI translation
 
-Translated with [Weblate](https://hosted.weblate.org/projects/ns8/). English is the
-source language in `ui/public/i18n/en/translation.json`.
+English is the source language, in `ui/public/i18n/en/translation.json`. German, Spanish,
+French, Italian, Portuguese and Brazilian Portuguese (matching `ns8-dnshelper`'s target
+languages) were translated directly from it and have not been reviewed by native speakers.
+Basque (`eu`) still carries the ns8-kickstart template's placeholder text, same gap as
+dnshelper's own `eu` locale — not yet translated.
 
-To set up the translation process:
+Not yet set up for this repository: [Weblate](https://hosted.weblate.org/projects/ns8/),
+for community translation and native-speaker review going forward.
 
 - add the [GitHub Weblate app](https://docs.weblate.org/en/latest/admin/continuous.html#github-setup)
   to your repository
