@@ -159,7 +159,7 @@
       :domain="current ? current.domain : ''"
       :dnshelperPresent="dnshelperPresent"
       @hide="isDnsStatusShown = false"
-      @changed="load"
+      @changed="dnsChanged"
     />
     <ProfileLinkModal
       :isShown="isProfileLinkShown"
@@ -323,6 +323,20 @@ export default {
     showDnsStatus(row) {
       this.current = row;
       this.isDnsStatusShown = true;
+    },
+    dnsChanged() {
+      // The DNS status dialog only emits "changed" after successfully
+      // applying something for the domain it's open on -- creating or
+      // overwriting a record, which per DESIGN.md 5.6 also creates that
+      // domain's route right then. Whatever the page-level notice was
+      // warning about (most commonly "waiting for DNS" from toggling this
+      // same domain on) is now stale, so clear it rather than leave a
+      // banner that keeps saying "waiting" after the wait is over. Found
+      // live, 2026-09-24: closing the dialog left the old banner up even
+      // though the table right below it had already updated to "OK"/
+      // "Configured".
+      this.notice = { kind: "success", title: "", text: "" };
+      this.load();
     },
     showProfileLink(row) {
       this.current = row;
