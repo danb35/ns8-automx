@@ -29,11 +29,23 @@ class DomainRouteExistsTests(unittest.TestCase):
             self.assertTrue(routes.domain_route_exists("automx1", "example.com"))
 
     def test_false_when_no_route_exists(self):
+        # Found live, 2026-09-24: the real agent.get_route() returns {} for
+        # "no such route" -- not None. A plain `is not None` check (this
+        # function's first version) treats {} as "found", silently
+        # disabling the DNS gate for every domain, always. stub_agent.py's
+        # own default for an unset get_route_result is already {}, not
+        # None -- this test now matches that instead of contradicting it.
+        with mock.patch.object(routes.agent, "get_route", return_value={}):
+            self.assertFalse(routes.domain_route_exists("automx1", "example.com"))
+
+    def test_false_when_get_route_returns_none(self):
+        # Belt and suspenders: handle a literal None too, in case some
+        # other agent version or code path ever returns it instead of {}.
         with mock.patch.object(routes.agent, "get_route", return_value=None):
             self.assertFalse(routes.domain_route_exists("automx1", "example.com"))
 
     def test_checks_the_autoconfig_instance_for_that_domain(self):
-        get_route = mock.Mock(return_value=None)
+        get_route = mock.Mock(return_value={})
         with mock.patch.object(routes.agent, "get_route", get_route):
             routes.domain_route_exists("automx1", "example.com")
         get_route.assert_called_once_with(routes.instance_name("automx1", "autoconfig", "example.com", 0))
