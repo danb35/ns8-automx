@@ -64,6 +64,8 @@ them for you, after you review and confirm each change. See
 Open **Domains**. It lists every mail domain the mail module knows about. New domains
 start **disabled** — nothing is published for a domain until you turn it on.
 
+![The Domains page](images/domains.jpg)
+
 Turning a domain on:
 
 1. Reads the mail domain's user domain and looks up your directory's connection details.
@@ -138,9 +140,13 @@ that part — it needs an API credential from whichever service hosts your DNS.
 **2. Grant automx access.** dnshelper starts every module, including this one, with **no
 access at all** — a rule has to be added before automx can change (or even read) a
 single record, on purpose, so a bug or a misconfigured module can only ever touch what
-you explicitly allowed. Open dnshelper's **Access** page and add a rule (or use
-`set-policy` — the automx Domains page's DNS status dialog shows you this exact text,
-with the real zone name filled in, whenever it detects the rule is missing):
+you explicitly allowed. Until you do, automx's own DNS status dialog says so directly and
+shows the exact rule to add, with the real zone name already filled in:
+
+![DNS status showing the missing access rule, with the suggested rule to add](images/dns-status-not-permitted.jpg)
+
+Open dnshelper's **Access** page and add a rule with these values (or use `set-policy`
+with the same fields):
 
 | Field | Value |
 |---|---|
@@ -156,6 +162,8 @@ a CNAME needs to go (for example, deleting a stray A record at `autoconfig.<doma
 before adding the CNAME), the rule additionally needs to allow that conflicting type at
 the same names — add it (`A`, in that example) or set **Record types** to `*`.
 
+![The rule for automx1 on dnshelper's Access page, once added](images/dnshelper-access.jpg)
+
 **3. That's it** — no further step is needed on automx's side. Its Domains page rechecks
 dnshelper's coverage and your access rule live, every time you open the DNS status
 dialog: if you add the zone or the rule *after* a domain was already enabled here, automx
@@ -168,6 +176,8 @@ either way, since removing dnshelper's access doesn't touch anything already pub
 ## Settings
 
 Open **Settings**.
+
+![The Settings page](images/settings.jpg)
 
 - **Service host (FQDN)** — the name the CNAME and SRV records point at, and the host
   Outlook's Autodiscover route is published on. Leave it blank to use this node's own
@@ -201,12 +211,16 @@ users however you already reach them (an intranet page, a wiki, a welcome email)
 Both are a thin wrapper around the same already-public, unauthenticated URL — they add
 no authentication of their own, just convenience.
 
+![The profile link dialog, with the direct link and the embeddable form](images/profile-link.jpg)
+
 ## Checking on things: the Status page
 
 **Status** shows how many domains are enabled with a shortcut to manage them, the mail
 server and user domain currently in use, whether dnshelper is present, the automx
 service's own health, your backup status, and a card that opens this module's system
 logs.
+
+![The Status page](images/status.jpg)
 
 If a domain looks wrong, start here: the service cards show whether the automx
 service is actually running, which is the first thing to check if enabling a domain
