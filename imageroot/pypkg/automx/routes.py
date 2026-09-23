@@ -15,6 +15,7 @@
 # while the module stays installed (set_domains below).
 
 import os
+import sys
 
 import agent
 
@@ -90,15 +91,31 @@ def set_domain_routes(module_id, domain, http2https):
     return failures
 
 
+def _delete(instance):
+    """Best-effort delete-route: logs a warning on failure instead of
+    silently discarding the result (found in audit, 2026-09-24 -- every
+    other tasks.run call in this codebase checks exit_code, this one
+    didn't). Not fatal: a stale route left behind after a failed delete is
+    a much smaller problem than aborting the whole disable/removal flow
+    over it, matching set-domains/10apply's own best-effort handling of a
+    failed DNS-record removal."""
+    target = agent.resolve_agent_id("traefik@node")
+    response = agent.tasks.run(agent_id=target, action="delete-route", data={"instance": instance})
+    if response["exit_code"] != 0:
+        print(
+            agent.SD_WARNING + f"could not delete route {instance}: {response['error'] or response}",
+            file=sys.stderr,
+        )
+
+
 def delete_domain_routes(module_id, domain):
     """Remove one domain's routes (DESIGN.md 5.5, disabling a domain).
     Full-module removal doesn't need this: ns8-traefik's own module-removed
     handler cleans up every route whose instance name contains module_id."""
-    target = agent.resolve_agent_id("traefik@node")
     instances = [instance_name(module_id, "autoconfig", domain, i) for i in range(len(AUTOCONFIG_PATHS))]
     instances.append(instance_name(module_id, "autodiscover", domain, 0))
     for instance in instances:
-        agent.tasks.run(agent_id=target, action="delete-route", data={"instance": instance})
+        _delete(instance)
 
 
 def node_autodiscover_instance(module_id):
@@ -115,9 +132,4 @@ def set_node_autodiscover_route(module_id, node_fqdn, http2https):
 
 
 def delete_node_autodiscover_route(module_id):
-    target = agent.resolve_agent_id("traefik@node")
-    agent.tasks.run(
-        agent_id=target,
-        action="delete-route",
-        data={"instance": node_autodiscover_instance(module_id)},
-    )
+    _delete(node_autodiscover_instance(module_id))
