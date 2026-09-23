@@ -1,0 +1,15 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "get-dnshelper-status input",
+    "$id": "http://nethserver.org/json-schema/task/input/automx/get-dnshelper-status",
+    "description": "get-dnshelper-status. Takes no arguments: the admin UI sends no payload.",
+    "examples": [
+        {}
+    ],
+    "type": [
+        "object",
+        "null"
+    ],
+    "additionalProperties": false,
+    "properties": {}
+}

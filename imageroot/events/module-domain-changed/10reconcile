@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Re-reads LDAP parameters and reloads (DESIGN.md 6.2), same as
+# user-domain-changed.
+#
+# Payload -- CONFIRMED on a real node, 2026-09-22, by reading the actual
+# publisher (ns8-core's cluster/actions/bind-user-domains/50bind_user_domains):
+# {"modules": [<module_id whose binding changed>], "domains": [...]}. This
+# is published on the CLUSTER-WIDE channel cluster/event/module-domain-changed
+# -- every module subscribed to this event receives it whenever ANY module on
+# the cluster calls agent.bind_user_domains(), not just when our own binding
+# changes. The original assumption here ("reconcile() is cheap enough to run
+# unconditionally and is idempotent either way") was wrong in practice: a
+# full reconcile costs real work (container restart, several NS8 task RPCs),
+# and without this filter, reacting to some *other* module's own routine
+# rebinding created a permanent, self-sustaining reconcile loop on this
+# module alone -- confirmed live via journalctl showing "Handler of
+# cluster/event/module-domain-changed is starting" firing every ~45-50s
+# indefinitely, restarting automx.service each time, entirely independent of
+# anything this module's own admin did. Filtering to our own MODULE_ID (the
+# one piece of information this specific event actually gives us to filter
+# on -- module identity, not domain names) is both correct and sufficient:
+# our own LDAP connection parameters come from Ldapproxy().get_domain(),
+# not from this event's payload, so another module's rebinding to a domain
+# we happen to share has nothing for us to re-read here.
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
+
+import agent
+from automx import mail, reconcile
+
+event = json.load(sys.stdin)
+
+if os.environ["MODULE_ID"] not in event.get("modules", []):
+    sys.exit(0)  # a different module's binding changed, not ours
+
+rdb = agent.redis_connect(use_replica=True)
+try:
+    mail.get_instance_info(rdb)
+except (mail.MailNotFound, mail.MailNotConfigured):
+    sys.exit(0)
+
+reconcile.reconcile(rdb)

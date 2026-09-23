@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
+
+import agent
+from automx import dnshelperclient, dnsstatus, domains as domains_lib, mail, node, routes, state
+
+rdb = agent.redis_connect(use_replica=True)
+
+domains_state = state.load_domains()
+settings = state.load_settings()
+
+try:
+    _module_id, _hostname, _user_domain, mail_domain_names = mail.get_instance_info(rdb)
+except (mail.MailNotFound, mail.MailNotConfigured):
+    mail_domain_names = set()
+
+dnshelper_target = dnshelperclient.find_instance()
+target_fqdn = settings.get("service_host") or node.get_node_fqdn()
+
+module_id = os.environ["MODULE_ID"]
+
+domains_out = []
+for entry in domains_lib.merge(mail_domain_names, domains_state):
+    route_status = "not_configured"
+    if entry["enabled"] and not entry["orphaned"]:
+        autoconfig_instance = routes.instance_name(module_id, "autoconfig", entry["domain"], 0)
+        if agent.get_route(autoconfig_instance):
+            route_status = "configured"
+
+    domains_out.append(
+        {
+            **entry,
+            "route_status": route_status,
+            "dns": dnsstatus.domain_dns_status(entry["domain"], target_fqdn, dnshelper_target),
+        }
+    )
+
+json.dump({"dnshelper_present": dnshelper_target is not None, "domains": domains_out}, fp=sys.stdout)

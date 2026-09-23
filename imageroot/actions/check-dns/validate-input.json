@@ -1,0 +1,22 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "check-dns input",
+    "$id": "http://nethserver.org/json-schema/task/input/automx/check-dns",
+    "description": "Recompute DNS status for one domain, or every known domain if omitted (DESIGN.md 6.1).",
+    "examples": [
+        {},
+        {
+            "domain": "example.com"
+        }
+    ],
+    "type": [
+        "object",
+        "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "domain": {
+            "type": "string"
+        }
+    }
+}

@@ -22,6 +22,13 @@
         <span>{{ $t("status.title") }}</span>
       </cv-side-nav-link>
       <cv-side-nav-link
+        @click="goToAppPage(instanceName, 'domains')"
+        :class="{ 'current-page': isLinkActive('domains') }"
+      >
+        <template v-slot:nav-icon><Email20 /></template>
+        <span>{{ $t("domains.title") }}</span>
+      </cv-side-nav-link>
+      <cv-side-nav-link
         @click="goToAppPage(instanceName, 'settings')"
         :class="{ 'current-page': isLinkActive('settings') }"
       >
@@ -43,6 +50,7 @@
 import Settings20 from "@carbon/icons-vue/es/settings/20";
 import Information20 from "@carbon/icons-vue/es/information/20";
 import Activity20 from "@carbon/icons-vue/es/activity/20";
+import Email20 from "@carbon/icons-vue/es/email/20";
 import { mapState } from "vuex";
 import { QueryParamService, UtilService } from "@nethserver/ns8-ui-lib";
 
@@ -52,6 +60,7 @@ export default {
     Settings20,
     Information20,
     Activity20,
+    Email20,
   },
   mixins: [QueryParamService, UtilService],
   data() {

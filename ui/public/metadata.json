@@ -1,19 +1,18 @@
 {
-  "name": "kickstart",
+  "name": "automx",
   "description": {
-    "en": "My kickstart module"
+    "en": "Email client autoconfiguration for NethServer 8 mail domains"
   },
-  "categories": [],
+  "categories": ["mail"],
   "authors": [
     {
-      "name": "Name Surname",
-      "email": "author@yourmail.org"
+      "name": "Dan Brown"
     }
   ],
   "docs": {
-    "documentation_url": "https://docs.kickstart.com/",
-    "bug_url": "https://github.com/NethServer/dev",
-    "code_url": "https://github.com/author/ns8-kickstart"
+    "documentation_url": "https://github.com/danb35/ns8-automx",
+    "bug_url": "https://github.com/danb35/ns8-automx/issues",
+    "code_url": "https://github.com/danb35/ns8-automx"
   },
-  "source": "ghcr.io/nethserver/kickstart"
+  "source": "ghcr.io/danb35/automx"
 }

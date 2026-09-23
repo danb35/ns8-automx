@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
+
+import agent
+from automx import dns, dnshelperclient, mail, node, reconcile, routes, state
+
+data = json.load(sys.stdin)
+requested = data["domains"]
+
+rdb = agent.redis_connect(use_replica=True)
+
+try:
+    _module_id, _hostname, _user_domain, mail_domain_names = mail.get_instance_info(rdb)
+except (mail.MailNotFound, mail.MailNotConfigured):
+    mail_domain_names = set()
+
+domains_state = state.load_domains()
+
+# A domain can be toggled if the mail module currently has it, or if it's
+# already known here (so an orphan can still be disabled/cleaned up --
+# DESIGN.md 4.2).
+unknown = [d for d in requested if d not in mail_domain_names and d not in domains_state]
+if unknown:
+    agent.set_status("validation-failed")
+    json.dump(
+        [
+            {
+                "field": "domains",
+                "parameter": "domains",
+                "value": unknown,
+                "error": "domain_not_found",
+                "message": "not a domain of the configured mail instance",
+            }
+        ],
+        fp=sys.stdout,
+    )
+    sys.exit(3)
+
+module_id = os.environ["MODULE_ID"]
+dnshelper_target = dnshelperclient.find_instance()
+newly_disabled_with_dns_removal = []
+
+# Holds reconcile.py's shared lock across this whole read-modify-write of
+# domains.json plus the reconcile that follows, not just around reconcile()
+# itself -- otherwise two concurrent set-domains calls can still interleave
+# their domains.json writes around each other's render/restart cycle (found
+# on a real node, 2026-09-22, right after the reconcile()-only lock was
+# verified to fix the SIGTERM race it was added for -- see reconcile.py).
+with reconcile.lock():
+    for domain, flags in requested.items():
+        was_enabled = domains_state.get(domain, {}).get("enabled", False)
+        domains_state.setdefault(domain, {})["enabled"] = flags["enabled"]
+
+        if was_enabled and not flags["enabled"]:
+            # Disabling: always drop the routes; the DNS records are left
+            # alone unless remove_dns was explicitly asked for (DESIGN.md 5.5).
+            routes.delete_domain_routes(module_id, domain)
+            if flags.get("remove_dns") and dnshelper_target:
+                newly_disabled_with_dns_removal.append(domain)
+
+    state.save_domains(domains_state)
+
+    for domain in newly_disabled_with_dns_removal:
+        zone_info = dnshelperclient.has_zone(dnshelper_target, domain)
+        if not zone_info["managed"] or not zone_info["allowed"]:
+            continue
+        zone = zone_info["zone"]
+        settings = state.load_settings()
+        target_fqdn = settings.get("service_host") or node.get_node_fqdn()
+        to_delete = []
+        for record in dns.expected_records(domain, target_fqdn):
+            to_delete.append(
+                {
+                    "name": dns.dnshelper_relative_name(record["host"], zone),
+                    "type": record["type"],
+                    "data": record["value"],
+                }
+            )
+        try:
+            dnshelperclient.delete_records(dnshelper_target, zone, to_delete)
+        except dnshelperclient.DnshelperError as exc:
+            print(
+                agent.SD_WARNING
+                + f"could not remove DNS records for {domain}: {exc.code}: {exc.message}",
+                file=sys.stderr,
+            )
+
+    result = reconcile.reconcile_locked(rdb)
+
+json.dump({"route_failures": sorted(result["route_failures"].keys())}, fp=sys.stdout)

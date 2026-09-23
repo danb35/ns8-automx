@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
+
+from automx import dns, node, state
+
+data = json.load(sys.stdin)
+domain = data["domain"]
+
+settings = state.load_settings()
+target_fqdn = settings.get("service_host") or node.get_node_fqdn()
+
+# A conservative default TTL, informational only -- no provider is called
+# here (DESIGN.md 5.4: no create/overwrite actions on this path).
+SUGGESTED_TTL = 3600
+
+records = [
+    {**record, "suggested_ttl": SUGGESTED_TTL}
+    for record in dns.expected_records(domain, target_fqdn)
+]
+
+json.dump({"records": records}, fp=sys.stdout)

@@ -1,19 +1,62 @@
 name: "Clean up registry"
 
+# Deletes the ghcr.io image that "Publish images" made for a branch or tag when
+# that branch or tag is deleted. The shared NethServer action looks the image up
+# under basename(ref), but the publish workflow tags it with the ref where every
+# "/" became "-", so for a branch like feature/x it never found anything.
+#
+# Run it by hand (Actions > Clean up registry > Run workflow) with the image tag
+# to remove an image that was left behind.
 on:
   delete:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to delete, e.g. feature-x (never master, main or latest)"
+        required: true
 
 permissions:
   packages: write
 
+env:
+  IMAGES: automx
+
 jobs:
   delete_images:
-    name: "Delete ghcr.io images ${{ github.event.ref }}"
+    name: "Delete ghcr.io images ${{ inputs.tag || github.event.ref }}"
     runs-on: ubuntu-latest
-    environment: Registry
     steps:
-      - uses: NethServer/ns8-github-actions/.github/actions/delete-image@v1
-        with:
-          images: "automx"
-          delete_image_token: ${{ secrets.IMAGES_CLEANUP_TOKEN }}
+      - name: Delete the images tagged for the ref
+        env:
+          GH_TOKEN: ${{ secrets.IMAGES_CLEANUP_TOKEN || github.token }}
+          REF: ${{ inputs.tag || github.event.ref }}
+        run: |
+          set -euo pipefail
+          # the same sanitizing as publish-branch.yml
+          tag=$(printf '%s' "$REF" | tr '/' '-')
+          case "$tag" in
+            ''|master|main|latest) echo "::notice::not deleting the images tagged '$tag'"; exit 0 ;;
+          esac
+          if [[ "$(gh api "repos/${GITHUB_REPOSITORY}" -q .owner.type)" == Organization ]]; then
+            owner_path="orgs/${GITHUB_REPOSITORY_OWNER}"
+          else
+            owner_path="users/${GITHUB_REPOSITORY_OWNER}"
+          fi
+          for image in $IMAGES; do
+            versions="${owner_path}/packages/container/${image}/versions"
+            all=$(gh api --paginate "$versions")
+            # a version that carries other tags too (master and latest share one)
+            # cannot be deleted for one tag without losing the others
+            shared=$(jq -r --arg t "$tag" '.[] | select((.metadata.container.tags | index($t)) and (.metadata.container.tags | length) > 1) | .id' <<<"$all")
+            if [[ -n "$shared" ]]; then
+              echo "::warning::${image}:${tag} shares its version with other tags; not deleted"
+            fi
+            ids=$(jq -r --arg t "$tag" '.[] | select(.metadata.container.tags == [$t]) | .id' <<<"$all")
+            if [[ -z "$ids" && -z "$shared" ]]; then
+              echo "::notice::no ${image} image is tagged '${tag}'"
+            fi
+            for id in $ids; do
+              gh api --input /dev/null -X DELETE "${versions}/${id}"
+              echo "::notice::deleted ${image}:${tag} (version ${id})"
+            done
+          done

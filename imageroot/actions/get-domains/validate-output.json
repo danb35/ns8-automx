@@ -1,0 +1,118 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "get-domains output",
+    "$id": "http://nethserver.org/json-schema/task/output/automx/get-domains",
+    "description": "Mail domains merged with stored enable flags, route status, and DNS status per record (DESIGN.md 6.1).",
+    "type": "object",
+    "required": [
+        "dnshelper_present",
+        "domains"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "dnshelper_present": {
+            "type": "boolean"
+        },
+        "domains": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "domain",
+                    "enabled",
+                    "orphaned",
+                    "route_status",
+                    "dns"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "domain": {
+                        "type": "string"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "orphaned": {
+                        "type": "boolean",
+                        "description": "In state/domains.json but no longer among the mail module's domains"
+                    },
+                    "route_status": {
+                        "type": "string",
+                        "enum": [
+                            "configured",
+                            "not_configured"
+                        ]
+                    },
+                    "dns": {
+                        "type": "object",
+                        "required": [
+                            "managed",
+                            "zone",
+                            "allowed",
+                            "records"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                            "managed": {
+                                "type": "boolean",
+                                "description": "true if dnshelper covers this domain's zone"
+                            },
+                            "zone": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "allowed": {
+                                "type": [
+                                    "boolean",
+                                    "null"
+                                ],
+                                "description": "null when dnshelper is absent or the zone isn't managed"
+                            },
+                            "records": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "required": [
+                                        "host",
+                                        "type",
+                                        "value",
+                                        "status"
+                                    ],
+                                    "additionalProperties": true,
+                                    "properties": {
+                                        "host": {
+                                            "type": "string"
+                                        },
+                                        "type": {
+                                            "type": "string",
+                                            "enum": [
+                                                "CNAME",
+                                                "SRV"
+                                            ]
+                                        },
+                                        "value": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "enum": [
+                                                "ok",
+                                                "missing",
+                                                "conflict",
+                                                "unmanaged",
+                                                "not_permitted",
+                                                "unknown"
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

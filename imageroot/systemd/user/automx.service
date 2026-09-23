@@ -1,33 +1,66 @@
 #
-# Copyright (C) 2022 Nethesis S.r.l.
+# Copyright (C) 2026 Dan Brown
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
 #
-# This systemd unit starts a kickstart instance using Podman.
-# Most parts of this file come from podman-generate-systemd.
+# automx has no database and no separate web-server frontend (DESIGN.md
+# 4.1) -- one container, one unit. No pod, no *-app.service split like the
+# ns8-kickstart template's mariadb+nginx example this repo started from.
+#
+# Config (automx.conf and the script-backend lookup helper's connection
+# parameters) is rendered on the host by render-automx-conf and bind-mounted
+# read-only; the lookup helper itself is baked into the image (Containerfile)
+# since it's static code, not per-instance state.
+#
+# --userns=keep-id --user %U:%U makes the container process run as this
+# module's own host UID/GID, so it can read the state/ files above -- which
+# include a 0600 LDAP bind password -- directly as their owner, instead of
+# the image's built-in non-root user (which a plain rootless run would remap
+# to an unrelated subordinate UID with no access to them). DESIGN.md 4.1
+# flags this as needing confirmation against a real node; do that before
+# considering this unit done (see DESIGN.md 9.2).
 #
 
 [Unit]
-Description=Podman kickstart.service
-Requires=mariadb-app.service kickstart-app.service
-Before=mariadb-app.service kickstart-app.service
+Description=Podman automx.service
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Environment=PODMAN_SYSTEMD_UNIT=%n
 EnvironmentFile=-%S/state/environment
+WorkingDirectory=%S/state
 Restart=always
 TimeoutStopSec=70
-ExecStartPre=/bin/rm -f %t/kickstart.pid %t/kickstart.pod-id
-ExecStartPre=/usr/bin/podman pod create --infra-conmon-pidfile %t/kickstart.pid \
-    --pod-id-file %t/kickstart.pod-id \
-    --name kickstart \
-    --publish 127.0.0.1:${TCP_PORT}:80 \
-    --replace
-ExecStart=/usr/bin/podman pod start --pod-id-file %t/kickstart.pod-id
-ExecStop=/usr/bin/podman pod stop --ignore --pod-id-file %t/kickstart.pod-id -t 10
-ExecStopPost=/usr/bin/podman pod rm --ignore -f --pod-id-file %t/kickstart.pod-id
-PIDFile=%t/kickstart.pid
+# `podman stop` sends SIGTERM to conmon, which then exits 143 (128+SIGTERM)
+# -- systemd's default SuccessExitStatus is just 0, so without this a
+# perfectly normal `systemctl --user stop` (e.g. reload-automx's
+# stop_and_clear() when zero domains are enabled, DESIGN.md 4.3) is
+# recorded as "failed", which get-status then surfaces to the admin UI as
+# a false failure for expected behavior. Found on a real node, 2026-09-22,
+# by disabling the only enabled domain and checking get-status afterward.
+# 137 covers the TimeoutStopSec escalation to SIGKILL.
+SuccessExitStatus=143 137
+ExecStartPre=/bin/rm -f %t/automx.pid %t/automx.ctr-id
+# Regenerate automx.conf and the lookup helper's connection file from
+# current module state before every start (DESIGN.md 4.2: "regenerated on
+# every service start"), so a stale/missing render never leaves the old
+# container config silently running past a state change.
+ExecStartPre=runagent render-automx-conf
+ExecStart=/usr/bin/podman run --conmon-pidfile %t/automx.pid \
+    --cidfile %t/automx.ctr-id --cgroups=no-conmon \
+    --replace -d --name automx \
+    --network=slirp4netns:allow_host_loopback=true \
+    --publish 127.0.0.1:${TCP_PORT}:8000 \
+    --userns=keep-id --user %U:%U \
+    --read-only --tmpfs /tmp:size=16m,mode=1777 \
+    --volume %S/state/automx.conf:/etc/automx/automx.conf:ro,Z \
+    --volume %S/state/ldap-lookup.json:/etc/automx/ldap-lookup.json:ro,Z \
+    ${AUTOMX_APP_IMAGE}
+ExecStop=/usr/bin/podman stop --ignore --cidfile %t/automx.ctr-id -t 10
+ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/automx.ctr-id
+PIDFile=%t/automx.pid
 Type=forking
 
 [Install]

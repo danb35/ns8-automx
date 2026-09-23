@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# state/domains.json and state/settings.json are restored directly by the
+# inherited 10restore (Restic) step, as plain files -- unlike the
+# ns8-kickstart template this module started from, there's no TRAEFIK_HOST-
+# style env var to copy back via agent.set_env() (DESIGN.md 4.2: settings
+# live in state files, not the environment) and no database dump to load.
+# Rebuild routes and automx.conf from whatever was restored; must tolerate
+# the mail module or accounts provider not yet being present (DESIGN.md 4.2).
+
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
+
+import agent
+from automx import reconcile
+
+rdb = agent.redis_connect(use_replica=True)
+reconcile.reconcile(rdb)

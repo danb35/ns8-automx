@@ -1,0 +1,22 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "get-profile-link output",
+    "$id": "http://nethserver.org/json-schema/task/output/automx/get-profile-link",
+    "description": "The mobileconfig URL and a copyable embeddable HTML form for one enabled domain (DESIGN.md 7.1). No state changes, no automx call -- built entirely from state/domains.json.",
+    "type": "object",
+    "required": [
+        "url",
+        "html_snippet"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "url": {
+            "type": "string",
+            "description": "automx's own credential-free download form, GET https://autoconfig.<domain>/mobileconfig"
+        },
+        "html_snippet": {
+            "type": "string",
+            "description": "A self-contained POST form an administrator can embed on their own page instead of linking to automx's form directly"
+        }
+    }
+}

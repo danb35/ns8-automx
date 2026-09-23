@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Renders state/automx.conf and state/ldap-lookup.json from current module
+# state plus discovery data (DESIGN.md 4.3). Runs on the host, under the NS8
+# agent framework -- unlike imageroot/bin/automx-ldap-lookup, which runs
+# INSIDE the automx-app container and cannot see any of this.
+#
+# Called two ways (DESIGN.md 4.2/4.3):
+#   - as automx.service's ExecStartPre, a safety-net re-render straight to
+#     the live paths before every start (e.g. after a reboot);
+#   - via `--suffix .staging` from imageroot/bin/reload-automx, which
+#     validates the staged output with `automx config validate` before
+#     promoting it over the live config -- so a bad render or a config that
+#     fails validation never takes down a working instance. That
+#     validate-then-promote sequencing lives in reload-automx, not here;
+#     this script's job is just to render correctly and fail loudly.
+#
+# On success, prints the JSON list of enabled domains actually rendered, so
+# reload-automx doesn't need to redo the mail-module/state lookups just to
+# know which --domain values to pass to `automx config validate`.
+#
+# Neither automx.conf nor ldap-lookup.json is backed up (etc/state-include.conf):
+# both are pure functions of module state + live discovery data, regenerated
+# every time this runs, and ldap-lookup.json carries the LDAP bind password.
+
+import argparse
+import configparser
+import io
+import json
+import os
+import sys
+
+import agent
+from agent.ldapproxy import Ldapproxy
+
+sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
+from automx import domains, mail, node as automx_node, state  # noqa: E402
+
+# The container reaches the host's ldapproxy loopback listener at this
+# address, not 127.0.0.1, because automx.service runs with
+# --network=slirp4netns:allow_host_loopback=true (DESIGN.md 3.3/4.1).
+CONTAINER_HOST_LOOPBACK = "10.0.2.2"
+
+# Distinct from an unhandled exception's default exit(1) (real-node finding,
+# 2026-09-22): reload-automx must be able to tell "nothing to render, this
+# is expected" (DESIGN.md 4.3, e.g. zero enabled domains) apart from "this
+# script crashed" -- both used to exit 1, so a crash was silently treated
+# as the former and the service got stopped with no clear error surfaced.
+EXIT_NOTHING_TO_RENDER = 2
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--suffix",
+        default="",
+        help="append this to automx.conf/ldap-lookup.json's filenames "
+        "(e.g. '.staging' for reload-automx's validate-before-promote step)",
+    )
+    args = parser.parse_args()
+
+    automx_conf_path = os.path.join(state.STATE_DIR, "automx.conf" + args.suffix)
+    ldap_lookup_path = os.path.join(state.STATE_DIR, "ldap-lookup.json" + args.suffix)
+
+    settings = state.load_settings()
+    domains_state = state.load_domains()
+
+    rdb = agent.redis_connect(use_replica=True)
+
+    try:
+        mail_module_id, mail_hostname, user_domain, mail_domain_names = mail.get_instance_info(rdb)
+    except mail.MailNotFound:
+        print(agent.SD_WARNING + "no mail module instance found, nothing to render", file=sys.stderr)
+        clear_rendered_state(automx_conf_path, ldap_lookup_path)
+        sys.exit(EXIT_NOTHING_TO_RENDER)
+    except mail.MailNotConfigured:
+        print(agent.SD_WARNING + "mail module is not fully configured yet, nothing to render", file=sys.stderr)
+        clear_rendered_state(automx_conf_path, ldap_lookup_path)
+        sys.exit(EXIT_NOTHING_TO_RENDER)
+
+    # Enabled AND still present in the mail module -- a domain removed from
+    # mail is dropped from generated config, the stored flag is kept
+    # (DESIGN.md 4.2, orphan handling belongs to get-domains/set-domains,
+    # not to this renderer).
+    enabled_domains = domains.enabled_usable(mail_domain_names, domains_state)
+
+    if not enabled_domains:
+        # Not a warning: zero enabled/usable domains is an expected state
+        # (DESIGN.md 4.3, "With zero enabled domains the service is
+        # stopped"). Whoever called us decides what "stopped" means here:
+        # as automx.service's ExecStartPre, exiting nonzero simply prevents
+        # the start; reload-automx, seeing the same zero count, is expected
+        # to call `systemctl --user stop` itself.
+        clear_rendered_state(automx_conf_path, ldap_lookup_path)
+        sys.exit(EXIT_NOTHING_TO_RENDER)
+
+    service_host = settings.get("service_host") or automx_node.get_node_fqdn()
+
+    # Real-node finding (2026-09-22): agent.bind_user_domains() unconditionally
+    # calls the cluster's bind-user-domains action ("the previous list is
+    # discarded", per its own docstring) -- it does not skip the call or the
+    # resulting module-domain-changed event when the binding is already
+    # exactly this. render-automx-conf runs on every automx.service start
+    # (ExecStartPre) and every reconcile() call, so calling it unconditionally
+    # here re-fired module-domain-changed on every single render; our own
+    # module-domain-changed handler calls reconcile(), which renders again,
+    # which re-binds again -- a self-sustaining loop with no other trigger
+    # needed, confirmed live via journalctl showing "Handler of
+    # cluster/event/module-domain-changed is starting" on a ~45-50s cadence
+    # indefinitely (matching one full render+validate+restart cycle's
+    # duration) and even "Agent is busy... rejected!" once re-entry outpaced
+    # a still-running cycle. get_bound_domain_list() reads the current
+    # binding directly from Redis with no task call and no event -- only
+    # rebind when it's actually different.
+    if agent.get_bound_domain_list(rdb) != [user_domain]:
+        agent.bind_user_domains([user_domain])
+    ldap_domain = Ldapproxy().get_domain(user_domain)
+    agent.assert_exp(ldap_domain is not None, f"user domain {user_domain} is not available")
+
+    # Real-node finding (2026-09-22): takes the user domain name (it does
+    # its own internal get_domain(domain) lookup) -- not argument-less as
+    # DESIGN.md 3.3 assumed.
+    hidden_users_filter = Ldapproxy().get_ldap_users_search_filter_clause(user_domain)
+
+    write_ldap_lookup(ldap_lookup_path, ldap_domain, hidden_users_filter)
+    write_automx_conf(
+        automx_conf_path, service_host, enabled_domains, mail_hostname, settings["display_names"]
+    )
+
+    json.dump(enabled_domains, sys.stdout)
+
+
+def atomic_write(path, content, mode):
+    tmp_path = f"{path}.{os.getpid()}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    os.chmod(tmp_path, mode)
+    os.replace(tmp_path, path)
+
+
+def write_ldap_lookup(path, ldap_domain, hidden_users_filter):
+    # ldap_domain['host'] is ldapproxy's own loopback listener (127.0.0.1,
+    # from the host's point of view -- DESIGN.md 3.3); translate it to the
+    # address the automx-app container's network sees it at.
+    host = ldap_domain["host"]
+    if host in ("127.0.0.1", "localhost"):
+        host = CONTAINER_HOST_LOOPBACK
+
+    lookup_config = {
+        "host": host,
+        "port": ldap_domain["port"],
+        "bind_dn": ldap_domain["bind_dn"],
+        "bind_password": ldap_domain["bind_password"],
+        "base_dn": ldap_domain["base_dn"],
+        "schema": ldap_domain["schema"],
+        "hidden_users_filter": hidden_users_filter or "",
+    }
+    # Contains the LDAP bind password -- 0600, never logged, never backed up
+    # (etc/state-include.conf), regenerated every render.
+    atomic_write(path, json.dumps(lookup_config), mode=0o600)
+
+
+def write_automx_conf(path, service_host, enabled_domains, mail_hostname, display_names):
+    # interpolation=None: the script backend's argv template is a literal
+    # "%u %d %s" (automx's own macros, not configparser's) -- with the
+    # default BasicInterpolation, ConfigParser rejects a bare "%u" as an
+    # invalid interpolation reference on write.
+    config = configparser.ConfigParser(interpolation=None)
+    config.optionxform = str  # preserve automx's lowercase option names as-is
+
+    config["automx"] = {
+        "provider": service_host,
+        "domains": ", ".join(enabled_domains),
+        "autodiscover_v2": "no",
+    }
+
+    # backend = script, not backend = ldap: automx's native LDAP backend
+    # can't express "login attribute equals local-part, else mail equals
+    # full address" (only %s/full-address substitution in its filter) and
+    # has no fallback on a miss. automx-ldap-lookup implements both the
+    # lookup rule and the fallback itself (DESIGN.md 3.3).
+    global_section = {
+        "backend": "script",
+        "script": "/usr/local/bin/automx-ldap-lookup %u %d %s",
+        "result_attrs": "login display_name",
+        "separator": "|",
+        "imap": "yes",
+        "imap_server": mail_hostname,
+        "imap_port": str(mail.IMAP_PORT),
+        "imap_encryption": "ssl",
+        "imap_auth": "plaintext",
+        "imap_auth_identity": "${login}",
+        "smtp": "yes",
+        "smtp_server": mail_hostname,
+        "smtp_port": str(mail.SMTP_PORT),
+        "smtp_encryption": "ssl",
+        "smtp_auth": "plaintext",
+        "smtp_auth_identity": "${login}",
+    }
+    if display_names:
+        global_section["account_name"] = "${display_name}"
+        global_section["account_name_short"] = "${display_name}"
+
+    config["global"] = global_section
+
+    out = io.StringIO()
+    config.write(out)
+    atomic_write(path, out.getvalue(), mode=0o640)
+
+
+def clear_rendered_state(automx_conf_path, ldap_lookup_path):
+    # Remove any stale config from a previous render -- this script owns
+    # only automx.conf/ldap-lookup.json; starting/stopping the service and
+    # tearing down routes is the caller's job (see call sites above).
+    for path in (automx_conf_path, ldap_lookup_path):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+
+
+if __name__ == "__main__":
+    main()

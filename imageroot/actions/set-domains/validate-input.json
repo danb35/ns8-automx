@@ -1,0 +1,46 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "set-domains input",
+    "$id": "http://nethserver.org/json-schema/task/input/automx/set-domains",
+    "description": "Enable/disable one or more domains (DESIGN.md 6.1). A domain not mentioned keeps its current enabled flag.",
+    "examples": [
+        {
+            "domains": {
+                "example.com": {
+                    "enabled": true
+                },
+                "example.org": {
+                    "enabled": false,
+                    "remove_dns": true
+                }
+            }
+        }
+    ],
+    "type": "object",
+    "required": [
+        "domains"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "domains": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+                "type": "object",
+                "required": [
+                    "enabled"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "enabled": {
+                        "type": "boolean"
+                    },
+                    "remove_dns": {
+                        "type": "boolean",
+                        "description": "Only meaningful when disabling: also delete the domain's DNS records through dnshelper, if it manages the zone (DESIGN.md 5.5). Ignored when enabling."
+                    }
+                }
+            }
+        }
+    }
+}
