@@ -71,13 +71,23 @@ Turning a domain on:
 1. Reads the mail domain's user domain and looks up your directory's connection details.
 2. Renders and validates automx's own configuration, and starts (or reloads) its
    service.
-3. Creates the Traefik routes for `autoconfig.<domain>` and `autodiscover.<domain>`,
-   with a Let's Encrypt certificate.
+3. If `autoconfig.<domain>` and `autodiscover.<domain>` already resolve to this node,
+   creates their Traefik routes right away, with a Let's Encrypt certificate.
 
-If the DNS for those two host names doesn't resolve to this node yet, the route can't
-finish setting up right away; the page tells you the domain is **waiting for DNS**. This
-is expected the first time you enable a domain before its DNS records exist — publish
-them (see the next section) and the route will complete the next time you check.
+If those two host names don't resolve yet — the usual case the first time you enable a
+domain, before its DNS records exist — automx deliberately does **not** create the route
+yet, and the Domains page shows the domain as **waiting for DNS** instead. This is by
+design, not a glitch to wait out: a route created before its DNS is ready gets exactly one
+shot at a certificate from Let's Encrypt, and a route stuck like that can stay
+uncertified for a long time (Let's Encrypt's own rate limits) even after the DNS is fixed
+soon after. So automx holds off instead.
+
+Nothing extra to do once DNS is in place, though — publish the records (see the next
+section) and automx creates the route and certificate automatically the next time it
+checks. Opening the domain's DNS status dialog, pressing **Check again** there, or
+confirming **Create missing records** (with dnshelper) all trigger that check on their
+own, so publishing the records is the last step, not a separate "now go create the route"
+one.
 
 A domain that later disappears from the mail module (its mail domain was removed) is
 marked **Orphaned**: automx keeps remembering whether it was enabled, but there's nothing
@@ -245,7 +255,7 @@ missing, the same as it would for a domain enabled for the first time.
 
 | What you see | What it means and what to do |
 |---|---|
-| A domain stays **Waiting for DNS** | Its `autoconfig`/`autodiscover` names don't resolve to this node yet. Publish the records (see [Publishing the DNS records](#publishing-the-dns-records)), then check the domain's DNS status again — the route completes once DNS is in place |
+| A domain stays **Waiting for DNS** | Its `autoconfig`/`autodiscover` names don't resolve to this node yet, so automx has deliberately held off creating its route rather than let it fail its one shot at a certificate. Publish the records (see [Publishing the DNS records](#publishing-the-dns-records)) — the route and certificate are created automatically the next time automx checks, which opening the DNS status dialog or pressing **Check again** both do |
 | **DNS is not managed by dnshelper for this domain** | Either dnshelper isn't installed, or it's installed but the zone covering this domain isn't one of its zones. Follow the copyable instructions shown, or add the zone on dnshelper's own Zones page |
 | **dnshelper has no access rule for this zone** | dnshelper knows the zone, but this automx instance hasn't been given a rule for it yet. Add the rule shown in the dialog — see [Optional: managing DNS through dnshelper](#optional-managing-dns-through-dnshelper) |
 | A DNS record shows **Conflict** | Something else already exists at that name with a different value (or a different record type). Use **Overwrite conflicting records** if dnshelper manages the zone, after reviewing the preview, or fix it at your DNS provider directly otherwise |
