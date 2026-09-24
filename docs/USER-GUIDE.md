@@ -142,7 +142,8 @@ records yourself, once, following the copyable list on the Domains page. With
 can create, check and fix those same records for you from its own Domains page, with a
 preview before every change.
 
-**1. Install dnshelper**, if it isn't already, and add a zone covering your mail
+**1. Install dnshelper**, if it isn't already (it's in the same Software center repository
+as automx; see the [README](../README.md#install)), and add a zone covering your mail
 domain(s) on its own Zones page. See dnshelper's own
 [user guide](https://github.com/danb35/ns8-dnshelper/blob/master/docs/USER-GUIDE.md) for
 that part — it needs an API credential from whichever service hosts your DNS.

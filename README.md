@@ -52,6 +52,28 @@ mail aliases to a login, and mobileconfig signing. See DESIGN.md section 2 and 1
 
 ## Install
 
+### From the Software center (recommended)
+
+automx is published in the software repository at
+[danb35.github.io/ns8-repomd](https://danb35.github.io/ns8-repomd/) (source:
+[danb35/ns8-repomd](https://github.com/danb35/ns8-repomd)), which also carries
+[dnshelper](https://github.com/danb35/ns8-dnshelper). Add it to the cluster once:
+
+1. In the cluster admin UI, open **Settings → Software repositories** and click **Add repository**.
+2. Enter a name (for example `danb35`) and the URL `https://danb35.github.io/ns8-repomd/`, leave
+   **Status** enabled, and click **Add repository**. NS8 warns about third-party repositories;
+   this one only lists the images published from this GitHub account.
+3. Open the **Software center**, find **automx**, and click **Install**.
+
+Or add the repository from a shell on the leader node:
+
+    api-cli run add-repository --data '{"name":"danb35","url":"https://danb35.github.io/ns8-repomd/","status":true}'
+
+With the repository added, new releases are offered as updates in the Software center like any
+other app. They are usually listed within a few minutes of being published.
+
+### From the command line
+
 Instantiate the module with:
 
     add-module ghcr.io/danb35/automx:latest 1
@@ -60,8 +82,8 @@ The output of the command returns the instance name:
 
     {"module_id": "automx1", "image_name": "automx", "image_url": "ghcr.io/danb35/automx:latest"}
 
-To install a particular release instead of the newest build, use its tag in place of
-`latest`, for example `ghcr.io/danb35/automx:0.1.0`.
+To install a particular release instead of the newest build, use its tag in place of `latest`,
+for example `ghcr.io/danb35/automx:0.1.1`.
 
 Then open the module's page in the NS8 admin UI, or see the
 [user guide](docs/USER-GUIDE.md) for the full walkthrough.
