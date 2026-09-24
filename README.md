@@ -42,9 +42,10 @@ Real client testing is done: Betterbird (a Thunderbird fork, Autoconfig), Outloo
 against the live node. This also resolved the `http2https` default (DESIGN.md VERIFY item
 6): kept at its default `true`, since no client needed a plain-HTTP fallback.
 
-Not yet done: `tests/integration/`'s scenario matrix is written but has not been run as
-an automated, re-runnable suite (everything in it has been exercised manually instead,
-across the passes above).
+`tests/integration/` has been run against a real node (an eighth pass, which found and fixed a
+readiness gap and a redundant restart after first enabling a domain). It does not yet cover route
+and certificate creation, dnshelper, or Samba AD, which need a node with those set up and inbound
+internet access; those were exercised manually in the earlier passes.
 
 Not in scope for v1: PACC, Autodiscover v2, several mail instances at once, resolving
 mail aliases to a login, and mobileconfig signing. See DESIGN.md section 2 and 12.
@@ -180,8 +181,9 @@ what was confirmed by actually building and running the resulting image locally.
 `tests/integration/` follows `ns8-dnshelper`'s own `tests/integration/` structure: a
 re-runnable script against a real node. Unlike dnshelper's version, it does not set up
 the mail domain or accounts provider itself — see `tests/integration/README.md` for what
-the node must already have. Its scenario matrix has not yet been run end to end as an
-automated suite; every scenario in it has instead been exercised manually across six
+the node must already have. It installs the published image and covers install,
+domains, the LDAP lookup and alias fallback, DNS status, backup/restore and removal; the
+route/certificate, dnshelper and Samba AD scenarios were exercised manually across the
 real-node passes recorded in DESIGN.md section 9.
 
 The Robot suite in `tests/` is the smoke test CI runs (`test-module.sh`):
