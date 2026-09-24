@@ -1,0 +1,38 @@
+name: "Notify software repository"
+
+# When the images for a release tag (plain semver, e.g. 1.2.3 or
+# 1.2.3-dev.1) have been published, ask danb35/ns8-repomd to rebuild its
+# index so the release is offered right away instead of at the next
+# scheduled build. Needs the REPOMD_DISPATCH_TOKEN secret: a fine-grained
+# token for danb35/ns8-repomd with "Contents: read and write".
+
+on:
+  workflow_run:
+    workflows: ["Publish images"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  notify:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Dispatch module-released to ns8-repomd
+        env:
+          GH_TOKEN: ${{ secrets.REPOMD_DISPATCH_TOKEN }}
+          REF: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          if ! [[ "$REF" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "$REF is not a release tag; nothing to do"
+            exit 0
+          fi
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::REPOMD_DISPATCH_TOKEN is not set; ns8-repomd will pick up $REF at its next scheduled build"
+            exit 0
+          fi
+          gh api repos/danb35/ns8-repomd/dispatches \
+            -f event_type=module-released \
+            -f "client_payload[module]=${GITHUB_REPOSITORY#*/ns8-}" \
+            -f "client_payload[tag]=$REF"
+          echo "Asked ns8-repomd to rebuild for $REF"
