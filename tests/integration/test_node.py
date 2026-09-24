@@ -9,6 +9,7 @@ import ast
 import json
 import os
 import subprocess
+import time
 import unittest
 
 NODE = os.environ.get('NS8_NODE')
@@ -43,7 +44,7 @@ def api(target, action, data=None, check=True):
     if data is None and target == 'cluster':
         p = ssh('api-cli run %s' % path, check=False)
     else:
-        p = ssh('api-cli run %s --data -' % path, json.dumps(data if data is not None else {}), check=False)
+        p = ssh('api-cli run %s --data -' % path, json.dumps(data), check=False)  # None -> null
     try:
         out = json.loads(p.stdout)
     except ValueError:
@@ -94,6 +95,13 @@ def http_status_now(module_id, path):
     cmd = ("curl -s -m 5 -o /dev/null -w '%%{http_code}' "
            "\"http://127.0.0.1:$(redis-cli HGET module/%s/environment TCP_PORT)%s\"") % (module_id, path)
     return ssh(cmd, check=False).stdout.strip()
+
+
+def service_active_since(module_id):
+    """When automx.service last became active (monotonic microseconds): it
+    changes only if the service was restarted."""
+    return ssh('runagent -m %s systemctl --user show automx.service -p ActiveEnterTimestampMonotonic'
+               % module_id).stdout.strip()
 
 
 def curl_automx(module_id, path, method='GET', data=None):
@@ -164,8 +172,9 @@ class NodeIntegration(unittest.TestCase):
         # waited for readiness.)
         self.assertEqual(http_status_now(cls.automx, '/health/ready'), '200',
                          'automx was not ready when set-domains returned')
+        cls.active_since = service_active_since(cls.automx)
 
-        rc, status = api(cls.automx, 'get-status', {})
+        rc, status = api(cls.automx, 'get-status', None)
         self.assertEqual(rc, 0)
         service = next(s for s in status['services'] if s['name'].startswith('automx'))
         self.assertTrue(service['active'] and not service['failed'], service)
@@ -185,6 +194,18 @@ class NodeIntegration(unittest.TestCase):
         else:
             self.assertEqual(entry['route_status'], 'configured')
             self.assertTrue(route_exists(route), 'no autoconfig route was created for %s' % MAIL_DOMAIN)
+
+    def test_03b_service_is_not_restarted_after_enabling(self):
+        # The first set-domains binds this module's user domain, which publishes
+        # module-domain-changed to this very module; its handler reconciles
+        # some seconds after set-domains has returned. That reconcile must find
+        # nothing changed and leave the running service alone -- it used to
+        # restart it, a second outage right after enabling. Wait long enough for
+        # the handler to have run (it takes ~10s to start and ~30s to finish).
+        cls = type(self)
+        time.sleep(60)
+        self.assertEqual(service_active_since(cls.automx), cls.active_since,
+                         'automx.service was restarted after set-domains had returned')
 
     def test_04_autoconfig_resolves_the_real_user(self):
         if not (TEST_USER_LOGIN and TEST_USER_MAIL):
@@ -250,30 +271,58 @@ class NodeIntegration(unittest.TestCase):
                          'the autoconfig route should have been removed on disable')
 
     def test_10_backup_and_restore_round_trip(self):
-        # NOTE: the exact cluster action name and payload for run-backup/
-        # restore-module were not independently verified against ns8-core's
-        # source in this session (unlike everything else in this file,
-        # which matches automx's own confirmed action contracts) -- check
-        # them against a real node/ns8-core before trusting this one.
         cls = type(self)
+        # Non-default values, so a restore that silently fell back to the
+        # defaults (both true) can't pass.
+        api(cls.automx, 'configure-module', {'http2https': False, 'display_names': False})
         api(cls.automx, 'set-domains', {'domains': {MAIL_DOMAIN: {'enabled': True}}})
-        rc, backup = api('cluster', 'run-backup', {'module_id': cls.automx}, check=False)
-        if rc != 0:
-            self.skipTest('no backup repository configured on this node')
 
+        # NS8's built-in "cluster" backup destination (restic over the node's
+        # own WireGuard address): needs no external service, and is removed
+        # again below.
+        wg = ssh("ip -4 -o addr show wg0 | awk '{print $4}' | cut -d/ -f1").stdout.strip()
+        _, repo = api('cluster', 'add-backup-repository', {
+            'name': 'automx-harness', 'provider': 'cluster', 'password': '', 'parameters': {},
+            'url': 'webdav:http://%s:4694' % wg,
+        })
+        self.addCleanup(lambda: api('cluster', 'remove-backup-repository', {'id': repo['id']}, check=False))
+        _, backup_id = api('cluster', 'add-backup', {
+            'name': 'automx-harness', 'instances': [cls.automx], 'repository': repo['id'],
+            'schedule': 'daily', 'schedule_hint': {}, 'retention': 1,
+            # run-backup skips a backup that is not enabled
+            'enabled': True,
+        })
+        self.addCleanup(lambda: api('cluster', 'remove-backup', {'id': backup_id}, check=False))
+
+        api('cluster', 'run-backup', {'id': backup_id})  # blocks until the snapshot is written
+        _, listing = api('cluster', 'list-backups', None)
+        instance = next(i for b in listing['backups'] if b['id'] == backup_id
+                        for i in b['instances'] if i['module_id'] == cls.automx)
+        self.assertTrue(instance['status'] and instance['status']['success'], instance)
+        _, snapshots = api('cluster', 'read-backup-snapshots',
+                           {'repository': repo['id'], 'path': instance['repository_path']})
+        latest = max(snapshots, key=lambda snap: snap['timestamp'])
+
+        before = set(existing_modules())
+        # replace=False: restore alongside the original instead of over it
         rc, out = api('cluster', 'restore-module', {
-            'module_id': cls.automx,
-            'image_url': IMAGE,
-            'node_id': 1,
-        }, check=False)
+            'repository': repo['id'], 'path': instance['repository_path'],
+            'snapshot': latest['id'], 'node': 1, 'replace': False,
+        })
         self.assertEqual(rc, 0, out)
-        restored_id = out['module_id']
+        restored = sorted(set(existing_modules()) - before)
+        self.assertEqual(len(restored), 1, 'restore-module should have created exactly one instance: %r' % restored)
+        restored_id = restored[0]
         INSTALLED.append(restored_id)
 
         rc, out = api(restored_id, 'get-domains', {})
         self.assertEqual(rc, 0)
         entry = next(d for d in out['domains'] if d['domain'] == MAIL_DOMAIN)
         self.assertTrue(entry['enabled'], 'state/domains.json should have round-tripped through the backup')
+        rc, config = api(restored_id, 'get-configuration', {})
+        self.assertFalse(config['http2https'], 'state/settings.json should have round-tripped through the backup')
+        self.assertFalse(config['display_names'])
+        self.assertEqual(http_status_now(restored_id, '/health/ready'), '200')
 
     def test_11_remove_module(self):
         cls = type(self)
