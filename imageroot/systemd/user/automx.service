@@ -32,6 +32,9 @@ Environment=PODMAN_SYSTEMD_UNIT=%n
 EnvironmentFile=-%S/state/environment
 WorkingDirectory=%S/state
 Restart=always
+# Covers the pre-start render (several NS8 task round trips) plus the
+# ExecStartPost readiness wait below.
+TimeoutStartSec=180
 TimeoutStopSec=70
 # `podman stop` sends SIGTERM to conmon, which then exits 143 (128+SIGTERM)
 # -- systemd's default SuccessExitStatus is just 0, so without this a
@@ -58,6 +61,15 @@ ExecStart=/usr/bin/podman run --conmon-pidfile %t/automx.pid \
     --volume %S/state/automx.conf:/etc/automx/automx.conf:ro,Z \
     --volume %S/state/ldap-lookup.json:/etc/automx/ldap-lookup.json:ro,Z \
     ${AUTOMX_APP_IMAGE}
+# `podman run -d` returns as soon as the container exists, and Type=forking
+# then calls the unit active -- before automx is listening, so a request
+# (or set-domains' own caller) in that window gets a connection reset.
+# Hold the start open until /health/ready answers (DESIGN.md 4.1). Found by
+# tests/integration on a real node, 2026-09-24: set-domains returned and the
+# very next request was reset; the same request succeeded 3s later.
+ExecStartPost=/usr/bin/curl --silent --fail --output /dev/null --max-time 3 \
+    --retry 60 --retry-delay 1 --retry-max-time 60 --retry-connrefused --retry-all-errors \
+    http://127.0.0.1:${TCP_PORT}/health/ready
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/automx.ctr-id -t 10
 ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/automx.ctr-id
 PIDFile=%t/automx.pid

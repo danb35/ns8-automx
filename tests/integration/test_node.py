@@ -2,9 +2,8 @@
 accounts provider. Skipped unless NS8_NODE, MAIL_MODULE_ID and MAIL_DOMAIN
 are set. See README.md in this directory.
 
-The module images are built on the node from local storage
-(build-on-node.sh); NS8 deletes a module's image when its last instance is
-removed, so the test rebuilds them whenever it needs to install again.
+The module is installed from the published image (AUTOMX_IMAGE, default
+ghcr.io/danb35/automx:latest), the artifact a release ships.
 """
 import ast
 import json
@@ -20,6 +19,10 @@ TEST_USER_LOGIN = os.environ.get('TEST_USER_LOGIN')
 TEST_USER_MAIL = os.environ.get('TEST_USER_MAIL')
 TEST_ALIAS_MAIL = os.environ.get('TEST_ALIAS_MAIL')
 DNSHELPER_MODULE_ID = os.environ.get('DNSHELPER_MODULE_ID')
+# A fresh install must come from a registry: the module's rootless podman storage is separate
+# from root's, so add-module cannot pull a localhost/ image built on the node (see
+# update-on-node.sh for the in-place update path that can).
+IMAGE = os.environ.get('AUTOMX_IMAGE', 'ghcr.io/danb35/automx:latest')
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -69,10 +72,6 @@ def existing_modules():
     return [m['id'] for group in (mods.values() if isinstance(mods, dict) else []) for m in group]
 
 
-def build_images():
-    subprocess.run([os.path.join(HERE, 'build-on-node.sh'), NODE], check=True, capture_output=True)
-
-
 def traefik_module_id():
     # Same resolution agent.resolve_agent_id("traefik@node") uses internally
     # (a plain string key, node/<id>/default_instance/traefik) -- don't
@@ -81,12 +80,28 @@ def traefik_module_id():
     return redis('GET', 'node/1/default_instance/traefik')
 
 
+def route_exists(instance):
+    # traefik's get-route answers {} with exit 0 for a route that doesn't
+    # exist, not a failure -- so existence is "non-empty", never "rc == 0".
+    rc, out = api(traefik_module_id(), 'get-route', {'instance': instance}, check=False)
+    return rc == 0 and bool(out)
+
+
+def http_status_now(module_id, path):
+    """The HTTP status of one request to the container's published port, in a
+    single SSH round trip and with no retry: used to prove the service is
+    already serving the moment an action returns."""
+    cmd = ("curl -s -m 5 -o /dev/null -w '%%{http_code}' "
+           "\"http://127.0.0.1:$(redis-cli HGET module/%s/environment TCP_PORT)%s\"") % (module_id, path)
+    return ssh(cmd, check=False).stdout.strip()
+
+
 def curl_automx(module_id, path, method='GET', data=None):
     """A request straight to the automx-app container's published loopback
     port -- the same thing Traefik would forward, without needing a route
     or DNS to exist yet (DESIGN.md 4.1)."""
     port = redis('HGET', 'module/%s/environment' % module_id, 'TCP_PORT')
-    args = ['-s', '-X', method, 'http://127.0.0.1:%s%s' % (port, path)]
+    args = ['-s', '-X', method, "'http://127.0.0.1:%s%s'" % (port, path)]
     if data:
         for key, value in data.items():
             args += ['-d', '%s=%s' % (key, value)]
@@ -113,9 +128,8 @@ class NodeIntegration(unittest.TestCase):
         stray = [m for m in existing_modules() if m.startswith('automx')]
         self.assertEqual(stray, [], 'run this test on a node without an automx instance: it only '
                                      'removes what it installs itself and would otherwise touch yours')
-        build_images()
         cls = type(self)
-        cls.automx = add_module('localhost/automx:test')
+        cls.automx = add_module(IMAGE)
 
         rc, _ = api(cls.automx, 'configure-module', {'http2https': True, 'display_names': True})
         self.assertEqual(rc, 0)
@@ -144,17 +158,33 @@ class NodeIntegration(unittest.TestCase):
         rc, out = api(cls.automx, 'set-domains', {'domains': {MAIL_DOMAIN: {'enabled': True}}})
         self.assertEqual(rc, 0)
         self.assertEqual(out['route_failures'], [], 'a real route-creation failure, not a DNS wait')
-        if out['waiting_for_dns']:
-            self.skipTest(
-                'route creation for %r deliberately skipped, DNS not ready yet (DESIGN.md 5.6) -- point '
-                'autoconfig./autodiscover.%s at this node to test route creation' % (out['waiting_for_dns'], MAIL_DOMAIN)
-            )
+        # Straight away, no retry: automx.service's start must not complete
+        # until /health/ready answers, so set-domains returning means serving.
+        # (Found here: a connection reset in this window, before the unit
+        # waited for readiness.)
+        self.assertEqual(http_status_now(cls.automx, '/health/ready'), '200',
+                         'automx was not ready when set-domains returned')
 
         rc, status = api(cls.automx, 'get-status', {})
         self.assertEqual(rc, 0)
+        service = next(s for s in status['services'] if s['name'].startswith('automx'))
+        self.assertTrue(service['active'] and not service['failed'], service)
 
-        rc, routes = api(traefik_module_id(), 'get-route', {'instance': '%s-autoconfig-%s-0' % (cls.automx, MAIL_DOMAIN)}, check=False)
-        self.assertEqual(rc, 0, 'no autoconfig route was created for %s' % MAIL_DOMAIN)
+        route = '%s-autoconfig-%s-0' % (cls.automx, MAIL_DOMAIN)
+        rc, domains = api(cls.automx, 'get-domains', {})
+        entry = next(d for d in domains['domains'] if d['domain'] == MAIL_DOMAIN)
+        if out['waiting_for_dns']:
+            # DESIGN.md 5.6: routes are held back until the domain's DNS
+            # resolves, since Traefik only ever tries a certificate once. A
+            # node with no inbound internet access (or no public DNS for the
+            # mail domain) can never get past this -- so on such a node this is
+            # what's testable: the gate holds, and says so.
+            self.assertEqual(out['waiting_for_dns'], [MAIL_DOMAIN])
+            self.assertEqual(entry['route_status'], 'waiting_for_dns')
+            self.assertFalse(route_exists(route), 'a route was created although DNS is not ready')
+        else:
+            self.assertEqual(entry['route_status'], 'configured')
+            self.assertTrue(route_exists(route), 'no autoconfig route was created for %s' % MAIL_DOMAIN)
 
     def test_04_autoconfig_resolves_the_real_user(self):
         if not (TEST_USER_LOGIN and TEST_USER_MAIL):
@@ -216,8 +246,8 @@ class NodeIntegration(unittest.TestCase):
         cls = type(self)
         rc, out = api(cls.automx, 'set-domains', {'domains': {MAIL_DOMAIN: {'enabled': False}}})
         self.assertEqual(rc, 0)
-        rc, _ = api(traefik_module_id(), 'get-route', {'instance': '%s-autoconfig-%s-0' % (cls.automx, MAIL_DOMAIN)}, check=False)
-        self.assertNotEqual(rc, 0, 'the autoconfig route should have been removed on disable')
+        self.assertFalse(route_exists('%s-autoconfig-%s-0' % (cls.automx, MAIL_DOMAIN)),
+                         'the autoconfig route should have been removed on disable')
 
     def test_10_backup_and_restore_round_trip(self):
         # NOTE: the exact cluster action name and payload for run-backup/
@@ -233,7 +263,7 @@ class NodeIntegration(unittest.TestCase):
 
         rc, out = api('cluster', 'restore-module', {
             'module_id': cls.automx,
-            'image_url': 'localhost/automx:test',
+            'image_url': IMAGE,
             'node_id': 1,
         }, check=False)
         self.assertEqual(rc, 0, out)

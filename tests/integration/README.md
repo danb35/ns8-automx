@@ -22,14 +22,24 @@ automx's own scope. Point this test at a node that already has:
   *not* add) the access rule described in DESIGN.md 5.3.6 to cover the `not_permitted` case.
 
 The test refuses to start if an `automx*` instance already exists (it only removes what it
-installed itself), and rebuilds the images on each run (`build-on-node.sh`): NS8 deletes a
-module's image when its last instance is removed.
+installed itself). It installs the **published** image, `ghcr.io/danb35/automx:latest` by default
+(override with `AUTOMX_IMAGE`, for example a branch image `ghcr.io/danb35/automx:<branch>` that CI
+published): a fresh `add-module` cannot use an image built on the node, because the module's
+rootless podman storage is separate from root's and `localhost/` is not a registry it can pull from.
 
 ## Prerequisites
 
-- An NS8 node you can `ssh root@` with a key, with buildah and outbound internet access (the
-  automx-app image is built from source on the node -- see `build-on-node.sh`).
+- An NS8 node you can `ssh root@` with a key, and outbound internet access to ghcr.io.
 - The mail module, accounts provider, and (optionally) dnshelper already configured as above.
+- `buildah` on the node only for the by-hand flow at the bottom (`update-on-node.sh`).
+
+## Nodes without inbound internet access
+
+Route creation needs `autoconfig.<domain>` to resolve to the node and Let's Encrypt to reach it
+(DESIGN.md 5.6). On a node that is not reachable from outside, or whose mail domain has no public
+DNS pointing at it, the module correctly holds the routes back (`waiting_for_dns`). The test
+detects that and asserts the gate instead: no route exists, and `get-domains` says why. Route and
+certificate creation itself is only exercised on a node that can satisfy both.
 
 ## Running
 
@@ -60,18 +70,19 @@ after `tests/integration/build-on-node.sh <node>`.
 
 ## Working with an installed instance
 
-To try the module by hand on a node, build under a tag and install it:
+To try local, unpublished code by hand, install the published image first, then update the
+instance **in place** (keeping `state/domains.json` and `state/settings.json`) to a build of your
+working tree under a new tag:
 
 ```bash
-tests/integration/build-on-node.sh <node> dev1
-ssh root@<node> add-module localhost/automx:dev1 1
+ssh root@<node> add-module ghcr.io/danb35/automx:latest 1
+tests/integration/update-on-node.sh <node> automx1 dev1
 ```
 
-After changing the code, update **in place** (keeping `state/domains.json` and
-`state/settings.json`) with a new tag:
+Update again with another new tag after each change:
 
 ```bash
-tests/integration/update-on-node.sh <node> automx13 dev2
+tests/integration/update-on-node.sh <node> automx1 dev2
 ```
 
 The integration test itself must run on a node without an automx instance (see above).
