@@ -24,6 +24,11 @@ ssh "root@$node" "
     # from inside that context.
     podman save localhost/automx:$tag | runagent -m $module podman load >/dev/null
     podman save localhost/automx-app:$tag | runagent -m $module podman load >/dev/null
+    # The image label names automx-app:latest (build-images.sh outside CI), and
+    # podman-pull-missing only checks that the named image exists -- so point
+    # 'latest' at the image just loaded, or the update looks for a registry
+    # (or keeps running a stale app image from an earlier update).
+    runagent -m $module podman tag localhost/automx-app:$tag localhost/automx-app:latest
     echo '{\"module_url\":\"localhost/automx:$tag\",\"instances\":[\"$module\"]}' \
         | api-cli run update-module --data - >/dev/null
     podman rmi localhost/automx:$tag localhost/automx-app:$tag >/dev/null 2>&1 || true

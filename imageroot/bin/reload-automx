@@ -14,6 +14,7 @@
 # enabled/usable), 1 (render or validation failed -- previous config, if
 # any, is left running).
 
+import filecmp
 import json
 import os
 import subprocess
@@ -84,6 +85,20 @@ def discard_staged():
             pass
 
 
+def staged_matches_installed():
+    for path in (AUTOMX_CONF_PATH, LDAP_LOOKUP_PATH):
+        try:
+            if not filecmp.cmp(path + STAGING_SUFFIX, path, shallow=False):
+                return False
+        except FileNotFoundError:
+            return False
+    return True
+
+
+def service_is_active():
+    return agent.run_helper("systemctl", "--user", "is-active", "--quiet", "automx.service").returncode == 0
+
+
 def stop_and_clear():
     agent.run_helper("systemctl", "--user", "stop", "automx.service")
     for path in (AUTOMX_CONF_PATH, LDAP_LOOKUP_PATH):
@@ -112,6 +127,19 @@ def main():
         # 2026-09-22).
         print(agent.SD_ERR + "render-automx-conf failed:\n" + render.stderr, file=sys.stderr)
         return 1
+
+    # Idempotent: a reconcile that finds nothing changed must not bounce a
+    # healthy service. Found on a real node, 2026-09-24: the first
+    # set-domains binds this module's user domain, which publishes
+    # module-domain-changed to this very module, whose handler reconciles
+    # and used to restart automx again ~9s after set-domains had returned --
+    # a second ~6s outage right after enabling. The running config was
+    # validated when it was promoted, so an identical render needs neither
+    # re-validation nor a restart. (Image updates restart the service in
+    # update-module.d/20restart, not here.)
+    if staged_matches_installed() and service_is_active():
+        discard_staged()
+        return 0
 
     enabled_domains = json.loads(render.stdout)
     staged_conf_path = AUTOMX_CONF_PATH + STAGING_SUFFIX
