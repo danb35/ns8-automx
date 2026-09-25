@@ -39,7 +39,8 @@ certificate. Routes are now deliberately held back until DNS is ready (DESIGN.md
 
 Real client testing is done: Betterbird (a Thunderbird fork, Autoconfig), Outlook LTSC
 (Autodiscover) and Apple Mail on macOS (`.mobileconfig`) have all been confirmed working
-against the live node. This also resolved the `http2https` default (DESIGN.md VERIFY item
+against the live node. Parula has also been confirmed working, though which autodiscovery
+mechanism it used is not known. This also resolved the `http2https` default (DESIGN.md VERIFY item
 6): kept at its default `true`, since no client needed a plain-HTTP fallback.
 
 `tests/integration/` has been run against a real node (an eighth pass, which found and fixed a

@@ -462,6 +462,8 @@ Thunderbird (Autoconfig), Outlook (Autodiscover via CNAME and via SRV), Apple Ma
 
 **DONE (2026-09-24), against the real live node (familybrown.org), post-fix.** All three protocols confirmed working with real client software, not just raw HTTP responses: **Betterbird** (a Thunderbird fork) via Autoconfig, **Outlook LTSC** via Autodiscover, and **Apple Mail** on macOS via the served `.mobileconfig` profile. All three succeeded. This closes VERIFY item 6 (`http2https` default) -- see decisions log and 4.4.
 
+**Also confirmed (2026-09-25): Parula.** It set itself up against the same live node, but which mechanism it used (Autoconfig, Autodiscover, or something else) was not established.
+
 Not separately broken out in this pass: whether Outlook's Autodiscover specifically exercised the CNAME path, the SRV-fallback path, or both, and whether a mail alias address was tried in addition to a primary address, as 9.3 originally called for. Worth a closer look if a client-specific bug is ever reported, but not blocking anything at this point -- the protocols themselves are confirmed working end-to-end with real client software now, which is what this section exists to prove.
 
 ## 10. Decisions log
