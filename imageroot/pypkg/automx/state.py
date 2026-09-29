@@ -35,6 +35,9 @@ def _settings_path():
 # resolve_aliases: hand out the owner's login for a mail alias that
 # delivers to one user (automx/aliases.py); on by default, with the same
 # disclosure trade-off as display_names.
+# sign_profiles: sign Apple profiles with the service host's certificate
+# (automx/signing.py); off by default, it puts that TLS key in the
+# container.
 DEFAULT_SETTINGS = {
     "service_host": None,
     "http2https": True,
@@ -42,6 +45,7 @@ DEFAULT_SETTINGS = {
     "dav_module": None,
     "activesync_module": None,
     "resolve_aliases": True,
+    "sign_profiles": False,
 }
 
 

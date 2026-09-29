@@ -113,7 +113,22 @@
     "groupware_none_found_description": "Nextcloud, SOGo or WebTop can be offered here once installed, configured with a host name, and bound to the same user domain as the mail server. ActiveSync also requires SOGo or WebTop to use this mail server. Nextcloud must run on this node.",
     "kind_nextcloud": "Nextcloud",
     "kind_sogo": "SOGo",
-    "kind_webtop": "WebTop"
+    "kind_webtop": "WebTop",
+    "sign_profiles": "Sign Apple profiles",
+    "sign_profiles_tooltip": "Signs downloaded .mobileconfig profiles with the certificate of the service host, so Apple devices show them as verified. This puts that certificate's private key in the automx container.",
+    "signing_ok_title": "Profiles are signed",
+    "signing_ok_description": "Apple profiles are signed with the certificate of {host}.",
+    "signing_untrusted_title": "Certificate not trusted",
+    "signing_untrusted_description": "Profiles are signed with the certificate of {host}, but this server does not trust that certificate, so devices will probably show the profile as unverified.",
+    "signing_skipped_title": "Profiles are not signed",
+    "signing_problem_no_certificate": "There is no certificate for {host} yet. Profiles will be signed once Let's Encrypt has issued one.",
+    "signing_problem_not_available": "The certificate of {host} could not be read. See the logs for details.",
+    "signing_problem_unreadable": "The certificate or key of {host} could not be read.",
+    "signing_problem_not_rsa": "The certificate of {host} does not use an RSA key, which profile signing requires.",
+    "signing_problem_key_too_small": "The key of the certificate of {host} is shorter than 2048 bits.",
+    "signing_problem_key_mismatch": "The certificate of {host} does not match its key.",
+    "signing_problem_expired": "The certificate of {host} is expired or not yet valid.",
+    "signing_problem_no_digital_signature": "The certificate of {host} does not allow digital signatures."
   },
   "about": {
     "title": "About"

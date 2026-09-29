@@ -175,6 +175,80 @@ class GroupwareRenderTests(unittest.TestCase):
         self.assertIn("activesync", "".join(str(c) for c in stderr.write.call_args_list))
 
 
+class SigningRenderTests(unittest.TestCase):
+    # Profile signing (DESIGN.md 2, v2): only sign when automx can use the
+    # certificate, since a bad one stops automx loading its config at all.
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.paths = {
+            name: os.path.join(self.tmpdir.name, "signing", name + ".staging") for name in render.SIGNING_FILES
+        }
+
+    def status(self):
+        with open(self.paths["status.json"]) as f:
+            return json.load(f)
+
+    def test_usable_certificate_is_written_with_an_owner_only_key(self):
+        with mock.patch.object(render.signing, "fetch", return_value=("internal", b"CERT", b"KEY")), \
+                mock.patch.object(render.signing, "problem", return_value=None), \
+                mock.patch.object(render.signing, "trusted", return_value=True):
+            self.assertTrue(render.write_signing(self.paths, "node.example.net"))
+        self.assertEqual(os.stat(self.paths["key.pem"]).st_mode & 0o777, 0o600)
+        with open(self.paths["cert.pem"]) as f:
+            self.assertEqual(f.read(), "CERT")
+        self.assertEqual(
+            self.status(),
+            {"host": "node.example.net", "certificate_type": "internal", "problem": None, "trusted": True},
+        )
+
+    def test_traefik_fallback_certificate_is_not_used(self):
+        # Traefik's self-signed fallback means it has no certificate for
+        # the host yet; signing with it would show as unverified.
+        with mock.patch.object(render.signing, "fetch", return_value=("selfsigned", b"CERT", b"KEY")), \
+                mock.patch.object(render.signing, "problem", return_value=None), \
+                mock.patch("sys.stderr"):
+            self.assertFalse(render.write_signing(self.paths, "node.example.net"))
+        self.assertEqual(self.status()["problem"], "no_certificate")
+        self.assertFalse(os.path.exists(self.paths["key.pem"]))
+
+    def test_certificate_not_trusted_by_this_node_is_still_used(self):
+        # e.g. a private CA: the admin is warned, the profile is signed.
+        with mock.patch.object(render.signing, "fetch", return_value=("custom", b"CERT", b"KEY")), \
+                mock.patch.object(render.signing, "problem", return_value=None), \
+                mock.patch.object(render.signing, "trusted", return_value=False):
+            self.assertTrue(render.write_signing(self.paths, "node.example.net"))
+        self.assertFalse(self.status()["trusted"])
+
+    def test_unusable_certificate_skips_signing_and_says_why(self):
+        os.makedirs(os.path.dirname(self.paths["key.pem"]))
+        with open(self.paths["key.pem"], "w") as f:
+            f.write("stale")
+        with mock.patch.object(render.signing, "fetch", return_value=("custom", b"CERT", b"KEY")), \
+                mock.patch.object(render.signing, "problem", return_value="not_rsa"), \
+                mock.patch("sys.stderr"):
+            self.assertFalse(render.write_signing(self.paths, "node.example.net"))
+        self.assertFalse(os.path.exists(self.paths["key.pem"]))
+        self.assertEqual(self.status()["problem"], "not_rsa")
+
+    def test_fetch_failure_skips_signing(self):
+        with mock.patch.object(render.signing, "fetch", side_effect=AssertionError("get-certificate failed")), \
+                mock.patch("sys.stderr"):
+            self.assertFalse(render.write_signing(self.paths, "node.example.net"))
+        self.assertEqual(self.status()["problem"], "not_available")
+
+    def test_conf_names_the_mounted_material_only_when_signing(self):
+        path = os.path.join(self.tmpdir.name, "automx.conf")
+        render.write_automx_conf(path, "node.example.net", ["example.com"], "mail.example.com", True, sign=True)
+        section = read_ini(path)["automx"]
+        self.assertEqual(section["mobileconfig_sign"], "yes")
+        self.assertEqual(section["mobileconfig_signing_certificate"], "/etc/automx/signing/cert.pem")
+        self.assertEqual(section["mobileconfig_signing_key"], "/etc/automx/signing/key.pem")
+        render.write_automx_conf(path, "node.example.net", ["example.com"], "mail.example.com", True)
+        self.assertNotIn("mobileconfig_sign", read_ini(path)["automx"])
+
+
 class WriteLdapLookupTests(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()

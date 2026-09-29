@@ -51,8 +51,9 @@ internet access; those were exercised manually in the earlier passes.
 v2 (in progress, see DESIGN.md section 2): the capitalized `/Autodiscover/Autodiscover.xml`
 path is routed (automx is patched to serve it until upstream releases the change), and
 the CalDAV/CardDAV and ActiveSync endpoints of an installed Nextcloud, SOGo or WebTop can
-be published along with mail, and a mail alias that delivers to one user resolves to that
-user's login. Not yet real-node tested.
+be published along with mail, a mail alias that delivers to one user resolves to that
+user's login, and Apple profiles can be signed with the service host's certificate. Not
+yet real-node tested.
 
 Not in scope: PACC, Autodiscover v2, several mail instances at once. See DESIGN.md
 section 2 and 12.
@@ -130,6 +131,10 @@ argument-less ones, since the admin UI sends no payload.
   `autodiscover.<domain>` for each enabled domain, plus routes on the node's own FQDN
   restricted to the Autodiscover path in both spellings (SRV records point there). See
   DESIGN.md 3.4/4.4.
+- **Profile signing** (optional) reads the service host's certificate from Traefik
+  (`traefik@node:certadm`) and has automx sign `.mobileconfig` profiles with it; a
+  certificate automx can't use is skipped with the reason shown in Settings. See
+  `imageroot/pypkg/automx/signing.py`.
 - **Groupware** (CalDAV/CardDAV, ActiveSync) is read from the chosen module's own
   environment in Redis (SOGo, WebTop) or its Traefik route (Nextcloud, same node only),
   and offered only when it is bound to the mail instance's user domain (and, for

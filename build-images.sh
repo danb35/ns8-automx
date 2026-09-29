@@ -69,7 +69,7 @@ buildah run "${smokecontainer}" -- \
 buildah rm "${smokecontainer}" >/dev/null
 
 buildah config --entrypoint=/ \
-    --label="org.nethserver.authorizations=traefik@node:routeadm node:reader cluster:accountconsumer dnshelper@cluster:dnswriter mail@any:mailadm" \
+    --label="org.nethserver.authorizations=traefik@node:routeadm,certadm node:reader cluster:accountconsumer dnshelper@cluster:dnswriter mail@any:mailadm" \
     --label="org.nethserver.tcp-ports-demand=1" \
     --label="org.nethserver.rootfull=0" \
     --label="org.nethserver.min-core=3.20.1" \

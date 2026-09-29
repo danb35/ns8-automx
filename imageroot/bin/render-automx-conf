@@ -37,7 +37,7 @@ import agent
 from agent.ldapproxy import Ldapproxy
 
 sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
-from automx import domains, groupware, mail, node as automx_node, state  # noqa: E402
+from automx import domains, groupware, mail, node as automx_node, signing, state  # noqa: E402
 
 # The container reaches the host's ldapproxy loopback listener at this
 # address, not 127.0.0.1, because automx.service runs with
@@ -50,6 +50,12 @@ CONTAINER_HOST_LOOPBACK = "10.0.2.2"
 # script crashed" -- both used to exit 1, so a crash was silently treated
 # as the former and the service got stopped with no clear error surfaced.
 EXIT_NOTHING_TO_RENDER = 2
+
+# Mobileconfig signing material (DESIGN.md 2, v2): state/signing/ is
+# bind-mounted at this path. Holds a TLS private key: 0600, not backed up.
+SIGNING_DIR = "signing"
+CONTAINER_SIGNING_DIR = "/etc/automx/signing"
+SIGNING_FILES = ("cert.pem", "key.pem", "status.json")
 
 
 def main():
@@ -64,6 +70,9 @@ def main():
 
     automx_conf_path = os.path.join(state.STATE_DIR, "automx.conf" + args.suffix)
     ldap_lookup_path = os.path.join(state.STATE_DIR, "ldap-lookup.json" + args.suffix)
+    signing_paths = {
+        name: os.path.join(state.STATE_DIR, SIGNING_DIR, name + args.suffix) for name in SIGNING_FILES
+    }
 
     settings = state.load_settings()
     domains_state = state.load_domains()
@@ -74,11 +83,11 @@ def main():
         mail_module_id, mail_hostname, user_domain, mail_domain_names = mail.get_instance_info(rdb)
     except mail.MailNotFound:
         print(agent.SD_WARNING + "no mail module instance found, nothing to render", file=sys.stderr)
-        clear_rendered_state(automx_conf_path, ldap_lookup_path)
+        clear_rendered_state(automx_conf_path, ldap_lookup_path, *signing_paths.values())
         sys.exit(EXIT_NOTHING_TO_RENDER)
     except mail.MailNotConfigured:
         print(agent.SD_WARNING + "mail module is not fully configured yet, nothing to render", file=sys.stderr)
-        clear_rendered_state(automx_conf_path, ldap_lookup_path)
+        clear_rendered_state(automx_conf_path, ldap_lookup_path, *signing_paths.values())
         sys.exit(EXIT_NOTHING_TO_RENDER)
 
     # Enabled AND still present in the mail module -- a domain removed from
@@ -94,7 +103,7 @@ def main():
         # as automx.service's ExecStartPre, exiting nonzero simply prevents
         # the start; reload-automx, seeing the same zero count, is expected
         # to call `systemctl --user stop` itself.
-        clear_rendered_state(automx_conf_path, ldap_lookup_path)
+        clear_rendered_state(automx_conf_path, ldap_lookup_path, *signing_paths.values())
         sys.exit(EXIT_NOTHING_TO_RENDER)
 
     service_host = settings.get("service_host") or automx_node.get_node_fqdn()
@@ -126,12 +135,16 @@ def main():
     hidden_users_filter = Ldapproxy().get_ldap_users_search_filter_clause(user_domain)
 
     write_ldap_lookup(ldap_lookup_path, ldap_domain, hidden_users_filter)
+    sign = write_signing(signing_paths, service_host) if settings["sign_profiles"] else False
+    if not settings["sign_profiles"]:
+        clear_rendered_state(*signing_paths.values())
     write_automx_conf(
         automx_conf_path,
         service_host,
         enabled_domains,
         mail_hostname,
         settings["display_names"],
+        sign=sign,
         **groupware_urls(rdb, settings, mail_module_id, user_domain),
     )
 
@@ -158,6 +171,43 @@ def groupware_urls(rdb, settings, mail_module_id, user_domain):
                 file=sys.stderr,
             )
     return urls
+
+
+def write_signing(paths, service_host):
+    """Write the service host's certificate and key for automx to sign
+    with, plus status.json for get-configuration. Returns whether automx
+    should sign. A certificate automx can't use (ECDSA, expired, ...) or a
+    failed fetch skips signing with the reason recorded, instead of making
+    automx refuse to load its configuration."""
+    status = {"host": service_host, "certificate_type": None, "problem": None, "trusted": None}
+    try:
+        cert_type, cert_pem, key_pem = signing.fetch(service_host)
+        status["certificate_type"] = cert_type
+        if cert_type == "selfsigned":
+            # Traefik's fallback when it holds nothing for this host, e.g.
+            # before Let's Encrypt has issued one. A profile signed with it
+            # shows as unverified, which looks worse than unsigned; the
+            # certificate-changed handler re-renders once a real one exists.
+            status["problem"] = "no_certificate"
+        else:
+            status["problem"] = signing.problem(cert_pem, key_pem)
+    except Exception as exc:
+        print(agent.SD_WARNING + f"cannot read the certificate of {service_host}: {exc}", file=sys.stderr)
+        status["problem"] = "not_available"
+
+    os.makedirs(os.path.dirname(paths["status.json"]), exist_ok=True)
+    if status["problem"] is None:
+        status["trusted"] = signing.trusted(cert_pem)
+        atomic_write(paths["cert.pem"], cert_pem.decode("ascii"), mode=0o640)
+        atomic_write(paths["key.pem"], key_pem.decode("ascii"), mode=0o600)
+    else:
+        print(
+            agent.SD_WARNING + f"not signing Apple profiles, certificate of {service_host}: {status['problem']}",
+            file=sys.stderr,
+        )
+        clear_rendered_state(paths["cert.pem"], paths["key.pem"])
+    atomic_write(paths["status.json"], json.dumps(status), mode=0o640)
+    return status["problem"] is None
 
 
 def atomic_write(path, content, mode):
@@ -191,7 +241,14 @@ def write_ldap_lookup(path, ldap_domain, hidden_users_filter):
 
 
 def write_automx_conf(
-    path, service_host, enabled_domains, mail_hostname, display_names, dav_url=None, activesync_url=None
+    path,
+    service_host,
+    enabled_domains,
+    mail_hostname,
+    display_names,
+    dav_url=None,
+    activesync_url=None,
+    sign=False,
 ):
     # interpolation=None: the script backend's argv template is a literal
     # "%u %d %s" (automx's own macros, not configparser's) -- with the
@@ -205,6 +262,10 @@ def write_automx_conf(
         "domains": ", ".join(enabled_domains),
         "autodiscover_v2": "no",
     }
+    if sign:
+        config["automx"]["mobileconfig_sign"] = "yes"
+        config["automx"]["mobileconfig_signing_certificate"] = f"{CONTAINER_SIGNING_DIR}/cert.pem"
+        config["automx"]["mobileconfig_signing_key"] = f"{CONTAINER_SIGNING_DIR}/key.pem"
 
     # backend = script, not backend = ldap: automx's native LDAP backend
     # can't express "login attribute equals local-part, else mail equals
@@ -256,11 +317,11 @@ def write_automx_conf(
     atomic_write(path, out.getvalue(), mode=0o640)
 
 
-def clear_rendered_state(automx_conf_path, ldap_lookup_path):
+def clear_rendered_state(*paths):
     # Remove any stale config from a previous render -- this script owns
-    # only automx.conf/ldap-lookup.json; starting/stopping the service and
-    # tearing down routes is the caller's job (see call sites above).
-    for path in (automx_conf_path, ldap_lookup_path):
+    # only the files it renders; starting/stopping the service and tearing
+    # down routes is the caller's job (see call sites above).
+    for path in paths:
         try:
             os.remove(path)
         except FileNotFoundError:

@@ -15,7 +15,9 @@
         "resolve_aliases",
         "dav_module",
         "activesync_module",
-        "groupware"
+        "groupware",
+        "sign_profiles",
+        "signing"
     ],
     "additionalProperties": false,
     "properties": {
@@ -108,6 +110,63 @@
         },
         "resolve_aliases": {
             "type": "boolean"
+        },
+        "sign_profiles": {
+            "type": "boolean"
+        },
+        "signing": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "description": "Outcome of the last render with signing on (null when off or not rendered yet): the certificate used for the service host, why signing was skipped (problem), and whether this node's trust store trusts it (null if unknown).",
+            "required": [
+                "host",
+                "certificate_type",
+                "problem",
+                "trusted"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "host": {
+                    "type": "string"
+                },
+                "certificate_type": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "enum": [
+                        "internal",
+                        "custom",
+                        "selfsigned",
+                        null
+                    ]
+                },
+                "problem": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "enum": [
+                        "no_certificate",
+                        "not_available",
+                        "unreadable",
+                        "not_rsa",
+                        "key_too_small",
+                        "key_mismatch",
+                        "expired",
+                        "no_digital_signature",
+                        null
+                    ]
+                },
+                "trusted": {
+                    "type": [
+                        "boolean",
+                        "null"
+                    ]
+                }
+            }
         }
     }
 }
