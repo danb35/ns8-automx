@@ -88,7 +88,9 @@ The module:
 
 **Real node (2026-09-29, LAN test node, Rocky 9):** `certadm` was granted on install (`get-certificate` answered). With no certificate for the node FQDN, the status is `no_certificate` and profiles stay unsigned. Uploading a test RSA certificate for the node FQDN to Traefik fired `certificate-changed`; the handler re-rendered within ~20 s without any other action, the key file is 0600, the status reads `custom`, `trusted: false`, and the served profile is a valid CMS signature by that certificate. **Found:** ns8-traefik's `delete-certificate` publishes no `certificate-changed` (ns8-mail doesn't react to a delete either), so after a certificate is deleted automx keeps signing with the copy it has until its next render (any `configure-module`, `set-domains` or restart), which then drops it. Accepted as is: the copy is still a valid certificate.
 
-**VERIFY on a real node:** `certadm` is granted on update as well as on install; the Let's Encrypt certificate passes `openssl verify` on Rocky and Debian nodes; `certificate-changed` fires on renewal with the node FQDN in `names`; iOS and macOS show the signed profile as verified.
+**Public node (2026-09-29, ns8-test.2v6.in, Rocky 9):** with the node FQDN's real Let's Encrypt certificate the status is `internal`, `trusted: true`; the downloaded profile's CMS signature and chain (ns8-test.2v6.in, Let's Encrypt YR1, ISRG Root X1) verify with OpenSSL against macOS's trust store, and macOS `security cms` reports `GoodSignature`. `certadm` is also granted on update: an instance installed from 0.1.1 (without it) got 403 from `get-certificate` before updating to this build and succeeded after. A 403 there raises an exception rather than returning an exit code; the renderer records it as `not_available`.
+
+**VERIFY on a real node:** the Let's Encrypt certificate passes `openssl verify` on Debian nodes; `certificate-changed` fires on renewal with the node FQDN in `names`; iOS and macOS show the signed profile as verified when installing it.
 
 ### Out of scope for v2 (possible later)
 
