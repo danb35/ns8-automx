@@ -18,6 +18,11 @@
 
 import agent
 
+# Every internal call hides its task from the admin UI's notifications:
+# refresh-aliases makes these calls every 15 minutes, and each one showed
+# up as a bare "Completed" notification (found on a real node, 2026-09-29).
+HIDDEN = {"isNotificationHidden": True}
+
 # IMAPS/SMTPS are fixed, never advertised as configurable by ns8-mail
 # (DESIGN.md decisions log #11, VERIFY item 1).
 IMAP_PORT = 993
@@ -44,14 +49,14 @@ def find_instance(rdb):
 def get_configuration(mail_module_id):
     """{"hostname": str, "user_domain": dict}, from the mail module's own
     get-configuration action."""
-    response = agent.tasks.run(f"module/{mail_module_id}", action="get-configuration", data={})
+    response = agent.tasks.run(f"module/{mail_module_id}", action="get-configuration", data={}, extra=HIDDEN)
     agent.assert_exp(response["exit_code"] == 0, "mail get-configuration failed")
     return response["output"]
 
 
 def list_domains(mail_module_id):
     """List of domain dicts as ns8-mail's list-domains returns them."""
-    response = agent.tasks.run(f"module/{mail_module_id}", action="list-domains", data={})
+    response = agent.tasks.run(f"module/{mail_module_id}", action="list-domains", data={}, extra=HIDDEN)
     agent.assert_exp(response["exit_code"] == 0, "mail list-domains failed")
     return response["output"]
 

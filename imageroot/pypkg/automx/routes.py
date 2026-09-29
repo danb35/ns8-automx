@@ -119,7 +119,12 @@ def _delete(instance):
     over it, matching set-domains/10apply's own best-effort handling of a
     failed DNS-record removal."""
     target = agent.resolve_agent_id("traefik@node")
-    response = agent.tasks.run(agent_id=target, action="delete-route", data={"instance": instance})
+    response = agent.tasks.run(
+        agent_id=target,
+        action="delete-route",
+        data={"instance": instance},
+        extra={"isNotificationHidden": True},
+    )
     if response["exit_code"] != 0:
         print(
             agent.SD_WARNING + f"could not delete route {instance}: {response['error'] or response}",
