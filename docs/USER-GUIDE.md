@@ -211,11 +211,12 @@ Open **Settings**.
   who asks which login is behind an alias; turn it off if you'd rather not. New or changed
   aliases are picked up within 15 minutes.
 - **Sign Apple profiles** — off by default. Signs the profiles users download with this
-  server's own certificate (the one for the service host, normally from Let's Encrypt),
-  so iPhones and Macs show them as verified instead of unsigned. Below the switch,
-  Settings says whether profiles are actually being signed and, if not, why (for example,
-  no certificate yet, or a certificate type that can't be used for signing). Turning it on
-  places that certificate's private key inside the automx container.
+  server's own certificate for the service host: the one Let's Encrypt issues, or one you
+  uploaded in the certificate settings, which takes precedence. iPhones and Macs then show
+  the profiles as verified instead of unsigned. Below the switch, Settings says whether
+  profiles are actually being signed and, if not, why (for example, no certificate yet, or
+  an uploaded certificate with an ECDSA key, which can't be used for signing). Turning it
+  on places that certificate's private key inside the automx container.
 
 ### Calendars, contacts and ActiveSync
 
