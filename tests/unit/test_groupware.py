@@ -51,11 +51,18 @@ class ListCandidatesTests(unittest.TestCase):
         patches = [
             mock.patch.object(groupware.agent, "get_bound_domain_list", side_effect=self._bound),
             mock.patch.object(groupware.agent, "get_route", side_effect=lambda mid: self.routes.get(mid, {})),
+            mock.patch.object(groupware.agent, "list_service_providers", side_effect=self._providers),
             mock.patch.dict(os.environ, {"NODE_ID": "1"}),
         ]
         for patcher in patches:
             patcher.start()
             self.addCleanup(patcher.stop)
+
+    def _providers(self, rdb, service, transport, filters):
+        # imap providers by module_uuid, as the mail modules publish them.
+        mails = {MAIL_UUID: USER_DOMAIN, "other-uuid": "other.example.com"}
+        uuid = filters.get("module_uuid")
+        return [{"module_uuid": uuid, "user_domain": mails[uuid]}] if uuid in mails else []
 
     def _bound(self, rdb, module_id):
         return self.bound.get(module_id, [])
@@ -97,19 +104,35 @@ class ListCandidatesTests(unittest.TestCase):
 
     def test_activesync_needs_the_same_mail_module(self):
         # ActiveSync carries the mail too, so it must be the same mail
-        # server; DAV only needs the same user domain.
+        # server; DAV only needs the same user domain (here: bound to it).
         self.add("webtop1", module("webtop", WEBTOP_HOSTNAME="webtop.example.com", MAIL_MODULE_UUID="other-uuid"))
         (candidate,) = self.candidates()
         self.assertEqual(candidate["dav_url"], "https://webtop.example.com/webtop-dav/server.php")
         self.assertIsNone(candidate["activesync_url"])
 
     def test_webtop_with_same_mail_module(self):
-        self.add("webtop1", module("webtop", WEBTOP_HOSTNAME="webtop.example.com", MAIL_MODULE_UUID=MAIL_UUID))
+        # WebTop binds no user domain of its own; its mail module's counts.
+        self.add("webtop1", module("webtop", WEBTOP_HOSTNAME="webtop.example.com", MAIL_MODULE_UUID=MAIL_UUID), domains=[])
         (candidate,) = self.candidates()
         self.assertEqual(candidate["activesync_url"], "https://webtop.example.com/Microsoft-Server-ActiveSync")
 
+    def test_webtop_on_another_mail_module_with_our_user_domain_gets_dav_only(self):
+        self.modules["mail2"] = module("mail", MODULE_UUID="mail2-uuid")
+        with mock.patch.object(groupware.agent, "list_service_providers",
+                               return_value=[{"module_uuid": "mail2-uuid", "user_domain": USER_DOMAIN}]):
+            self.add("webtop1", module("webtop", WEBTOP_HOSTNAME="w.example.com", MAIL_MODULE_UUID="mail2-uuid"),
+                     domains=[])
+            (candidate,) = self.candidates()
+        self.assertIsNotNone(candidate["dav_url"])
+        self.assertIsNone(candidate["activesync_url"])
+
+    def test_webtop_on_a_mail_module_with_another_user_domain_is_left_out(self):
+        self.add("webtop1", module("webtop", WEBTOP_HOSTNAME="w.example.com", MAIL_MODULE_UUID="other-uuid"), domains=[])
+        self.assertEqual(self.candidates(), [])
+
     def test_other_user_domain_is_left_out(self):
-        self.add("sogo1", module("sogo", TRAEFIK_HOST="sogo.example.com", MAIL_SERVER=MAIL_UUID), domains=["other.example.com"])
+        # SOGo binds the user domain of the mail module it uses.
+        self.add("sogo1", module("sogo", TRAEFIK_HOST="sogo.example.com", MAIL_SERVER="other-uuid"), domains=["other.example.com"])
         self.assertEqual(self.candidates(), [])
 
     def test_nextcloud_host_comes_from_its_route_on_this_node(self):
