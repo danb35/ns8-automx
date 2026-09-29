@@ -205,6 +205,23 @@ Open **Settings**.
   disclosure to anyone who asks. Turn it off if you'd rather trade that away for clients
   showing the raw email address instead of a name.
 
+### Calendars, contacts and ActiveSync
+
+If Nextcloud, SOGo or WebTop is installed, automx can also hand out its calendar and
+contacts (CalDAV/CardDAV) or ActiveSync settings, so clients set those up along with
+mail. Pick the app under **CalDAV/CardDAV provider** or **ActiveSync provider** and save.
+
+- Apple devices get calendar and contacts accounts in the downloaded profile. Each
+  account asks for the password once, because the profile contains no passwords.
+- Thunderbird is told about the calendar and address book; Outlook and phones that use
+  ActiveSync are pointed at the ActiveSync server.
+- Users log in with the same user name as for mail.
+
+An app is only offered when it is set up with a host name and uses the same user domain
+as the mail server. ActiveSync also requires the app (SOGo or WebTop; Nextcloud has none)
+to use this mail server, and SOGo only offers what is switched on in its own settings.
+Nextcloud must run on the same node as automx.
+
 ## Sharing a download link with your users
 
 automx's own endpoints don't need a password — that's how autoconfiguration protocols

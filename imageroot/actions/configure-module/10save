@@ -9,10 +9,34 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
-from automx import state
+
+import agent
+from automx import groupware, mail, state
 
 data = json.load(sys.stdin) or {}
 
 settings = state.load_settings()
 settings.update({k: v for k, v in data.items() if k in state.DEFAULT_SETTINGS})
+
+# A chosen groupware module must actually provide that service for this
+# mail instance (DESIGN.md 2, v2 scope). Checked only when a module is set,
+# so saving the other settings needs no discovery at all.
+chosen = {"dav_url": data.get("dav_module"), "activesync_url": data.get("activesync_module")}
+if any(chosen.values()):
+    rdb = agent.redis_connect(use_replica=True)
+    try:
+        mail_module_id, _hostname, user_domain, _domains = mail.get_instance_info(rdb)
+        candidates = groupware.list_candidates(rdb, mail_module_id, user_domain)
+    except (mail.MailNotFound, mail.MailNotConfigured):
+        candidates = []
+    errors = [
+        {"field": field, "parameter": field, "value": chosen[service], "error": "groupware_not_available"}
+        for service, field in (("dav_url", "dav_module"), ("activesync_url", "activesync_module"))
+        if chosen[service] and groupware.find(candidates, chosen[service], service) is None
+    ]
+    if errors:
+        agent.set_status("validation-failed")
+        json.dump(errors, fp=sys.stdout)
+        sys.exit(3)
+
 state.save_settings(settings)

@@ -11,7 +11,10 @@
         "enabled_domain_count",
         "mail_hostname",
         "user_domain",
-        "dnshelper_present"
+        "dnshelper_present",
+        "dav_module",
+        "activesync_module",
+        "groupware"
     ],
     "additionalProperties": false,
     "properties": {
@@ -46,6 +49,61 @@
         },
         "dnshelper_present": {
             "type": "boolean"
+        },
+        "dav_module": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "activesync_module": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "groupware": {
+            "type": "array",
+            "description": "Groupware modules that can provide CalDAV/CardDAV or ActiveSync for the mail instance (automx/groupware.py); empty without a configured mail instance.",
+            "items": {
+                "type": "object",
+                "required": [
+                    "module_id",
+                    "kind",
+                    "host",
+                    "dav_url",
+                    "activesync_url"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "module_id": {
+                        "type": "string"
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "nextcloud",
+                            "sogo",
+                            "webtop"
+                        ]
+                    },
+                    "host": {
+                        "type": "string"
+                    },
+                    "dav_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "activesync_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                }
+            }
         }
     }
 }

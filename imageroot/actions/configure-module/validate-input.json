@@ -2,12 +2,14 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Configure automx",
     "$id": "http://nethserver.org/json-schema/task/input/automx/configure-module",
-    "description": "Settings for automx (DESIGN.md 6.1/7): service host override, http2https default, display-names toggle. All optional; an omitted field keeps its current value. Accepts null or {} so the admin UI can call it with no payload just to (re)apply current settings.",
+    "description": "Settings for automx (DESIGN.md 6.1/7): service host override, http2https default, display-names toggle, and the groupware modules whose CalDAV/CardDAV and ActiveSync endpoints are published. All optional; an omitted field keeps its current value. Accepts null or {} so the admin UI can call it with no payload just to (re)apply current settings.",
     "examples": [
         {
             "service_host": null,
             "http2https": true,
-            "display_names": true
+            "display_names": true,
+            "dav_module": "sogo1",
+            "activesync_module": null
         }
     ],
     "type": [
@@ -33,6 +35,24 @@
             "type": "boolean",
             "title": "Include display names",
             "description": "Include the LDAP-looked-up display name in autoconfig responses. The autoconfig/autodiscover/mobileconfig endpoints are unauthenticated by protocol design, so this is address-to-name disclosure for whoever asks (DESIGN.md 8); on by default, matching normal client behavior."
+        },
+        "dav_module": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "title": "CalDAV/CardDAV provider",
+            "description": "Module id (from get-configuration's groupware list) whose CalDAV/CardDAV endpoint is published, or null for none.",
+            "pattern": "^[a-z][a-z0-9-]*[0-9]+$"
+        },
+        "activesync_module": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "title": "ActiveSync provider",
+            "description": "Module id (from get-configuration's groupware list) whose ActiveSync endpoint is published, or null for none.",
+            "pattern": "^[a-z][a-z0-9-]*[0-9]+$"
         }
     }
 }

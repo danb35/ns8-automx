@@ -73,6 +73,54 @@
               :showCloseButton="false"
               class="mg-bottom maxwidth"
             />
+            <h4 class="mg-bottom">{{ $t("settings.groupware_title") }}</h4>
+            <p class="mg-bottom maxwidth">
+              {{ $t("settings.groupware_description") }}
+            </p>
+            <cv-select
+              :label="$t('settings.dav_module')"
+              v-model="davModule"
+              :disabled="stillLoading"
+              :invalid-message="fieldError(error.configureModule, 'dav_module')"
+              class="mg-bottom maxwidth"
+            >
+              <cv-select-option value="">{{
+                $t("settings.groupware_none")
+              }}</cv-select-option>
+              <cv-select-option
+                v-for="g in davProviders"
+                :key="g.module_id"
+                :value="g.module_id"
+                >{{ groupwareLabel(g) }}</cv-select-option
+              >
+            </cv-select>
+            <cv-select
+              :label="$t('settings.activesync_module')"
+              v-model="activesyncModule"
+              :disabled="stillLoading"
+              :invalid-message="
+                fieldError(error.configureModule, 'activesync_module')
+              "
+              class="mg-bottom maxwidth"
+            >
+              <cv-select-option value="">{{
+                $t("settings.groupware_none")
+              }}</cv-select-option>
+              <cv-select-option
+                v-for="g in activesyncProviders"
+                :key="g.module_id"
+                :value="g.module_id"
+                >{{ groupwareLabel(g) }}</cv-select-option
+              >
+            </cv-select>
+            <NsInlineNotification
+              v-if="!loading.getConfiguration && !groupware.length"
+              kind="info"
+              :title="$t('settings.groupware_none_found_title')"
+              :description="$t('settings.groupware_none_found_description')"
+              :showCloseButton="false"
+              class="mg-bottom maxwidth"
+            />
             <NsInlineNotification
               v-if="error.configureModule"
               kind="error"
@@ -126,6 +174,9 @@ export default {
       serviceHost: "",
       isHttpToHttpsEnabled: true,
       isDisplayNamesEnabled: true,
+      davModule: "",
+      activesyncModule: "",
+      groupware: [],
       loading: {
         getConfiguration: false,
         configureModule: false,
@@ -140,6 +191,12 @@ export default {
     ...mapState(["instanceName", "core", "appName"]),
     stillLoading() {
       return this.loading.getConfiguration || this.loading.configureModule;
+    },
+    davProviders() {
+      return this.groupware.filter((g) => g.dav_url);
+    },
+    activesyncProviders() {
+      return this.groupware.filter((g) => g.activesync_url);
     },
   },
   created() {
@@ -156,6 +213,11 @@ export default {
     next();
   },
   methods: {
+    groupwareLabel(g) {
+      return `${this.$t("settings.kind_" + g.kind)} (${g.module_id}, ${
+        g.host
+      })`;
+    },
     async getConfiguration() {
       this.loading.getConfiguration = true;
       this.error.getConfiguration = "";
@@ -164,6 +226,9 @@ export default {
         this.serviceHost = config.service_host || "";
         this.isHttpToHttpsEnabled = config.http2https;
         this.isDisplayNamesEnabled = config.display_names;
+        this.davModule = config.dav_module || "";
+        this.activesyncModule = config.activesync_module || "";
+        this.groupware = config.groupware;
       } catch (err) {
         this.error.getConfiguration = this.errorText(err);
       }
@@ -178,6 +243,8 @@ export default {
             service_host: this.serviceHost || null,
             http2https: this.isHttpToHttpsEnabled,
             display_names: this.isDisplayNamesEnabled,
+            dav_module: this.davModule || null,
+            activesync_module: this.activesyncModule || null,
           },
           title: this.$t("settings.configuring"),
         });

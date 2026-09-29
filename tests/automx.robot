@@ -31,6 +31,14 @@ Check if automx configuration reads back
     # No mail module on this throwaway CI node (DESIGN.md 9.1); get-configuration
     # must still degrade cleanly rather than fail the task.
     Should Be Equal    ${config}[mail_hostname]    ${None}
+    Should Be Equal    ${config}[dav_module]    ${None}
+    Should Be Equal    ${config}[groupware]    ${{ [] }}
+
+Check if configure-module rejects an unavailable groupware module
+    ${rc} =    Execute Command
+    ...    api-cli run module/${module_id}/configure-module --data '{"dav_module":"sogo1"}'
+    ...    return_rc=True  return_stdout=False
+    Should Not Be Equal As Integers    ${rc}  0
 
 Check if get-domains tolerates a missing mail module
     ${output}  ${rc} =    Execute Command    api-cli run module/${module_id}/get-domains --data '{}'

@@ -48,8 +48,13 @@ readiness gap and a redundant restart after first enabling a domain). It does no
 and certificate creation, dnshelper, or Samba AD, which need a node with those set up and inbound
 internet access; those were exercised manually in the earlier passes.
 
-Not in scope for v1: PACC, Autodiscover v2, several mail instances at once, resolving
-mail aliases to a login, and mobileconfig signing. See DESIGN.md section 2 and 12.
+v2 (in progress, see DESIGN.md section 2): the capitalized `/Autodiscover/Autodiscover.xml`
+path is routed (automx is patched to serve it until upstream releases the change), and
+the CalDAV/CardDAV and ActiveSync endpoints of an installed Nextcloud, SOGo or WebTop can
+be published along with mail. Not yet real-node tested.
+
+Not in scope: PACC, Autodiscover v2, several mail instances at once. See DESIGN.md
+section 2 and 12.
 
 ## Install
 
@@ -97,8 +102,8 @@ argument-less ones, since the admin UI sends no payload.
 
 | Action | Purpose |
 |---|---|
-| `configure-module` | Settings: service host override (default: this node's own FQDN), `http2https` default, `display_names` toggle. Starts the service once at least one domain is enabled. |
-| `get-configuration` | Settings plus a summary (enabled domain count, mail hostname, user domain, dnshelper presence) for the Status page. |
+| `configure-module` | Settings: service host override (default: this node's own FQDN), `http2https` default, `display_names` toggle, and the groupware modules (`dav_module`, `activesync_module`) whose endpoints are published. Starts the service once at least one domain is enabled. |
+| `get-configuration` | Settings plus a summary (enabled domain count, mail hostname, user domain, dnshelper presence) for the Status page, and the groupware modules that can provide CalDAV/CardDAV or ActiveSync. |
 | `get-domains` | The mail module's domains merged with the module's own enable/disable state: enabled flag, route status, DNS status per record, orphan flag. |
 | `set-domains` | Enable or disable one or more domains; applies Traefik routes, renders `automx.conf`, validates it, reloads the service. |
 | `check-dns` | Recompute DNS status for one domain (dnshelper path if it covers the zone, resolver path otherwise). |
@@ -121,8 +126,13 @@ argument-less ones, since the admin UI sends no payload.
   does the two-step lookup itself and always exits 0 with a fallback (the bare address,
   no display name) on a miss or an unreachable directory. See DESIGN.md 3.3.
 - **Traefik routes** (`traefik@node:routeadm`) publish `autoconfig.<domain>` and
-  `autodiscover.<domain>` for each enabled domain, plus one route on the node's own FQDN
-  restricted to the Autodiscover path (SRV records point there). See DESIGN.md 3.4/4.4.
+  `autodiscover.<domain>` for each enabled domain, plus routes on the node's own FQDN
+  restricted to the Autodiscover path in both spellings (SRV records point there). See
+  DESIGN.md 3.4/4.4.
+- **Groupware** (CalDAV/CardDAV, ActiveSync) is read from the chosen module's own
+  environment in Redis (SOGo, WebTop) or its Traefik route (Nextcloud, same node only),
+  and offered only when it is bound to the mail instance's user domain (and, for
+  ActiveSync, uses the same mail module). See `imageroot/pypkg/automx/groupware.py`.
 - **DNS records** (`autoconfig.<domain>`, `autodiscover.<domain>`,
   `_autodiscover._tcp.<domain>`) are managed directly through
   [ns8-dnshelper](https://github.com/danb35/ns8-dnshelper)

@@ -29,10 +29,15 @@ def _settings_path():
 # http2https: default true (DESIGN.md 4.4).
 # display_names: default true, with the disclosure trade-off explained in
 # the UI (DESIGN.md 8, decided 2026-09-22).
+# dav_module/activesync_module: the groupware module (e.g. "sogo1") whose
+# CalDAV/CardDAV or ActiveSync endpoint is published, or null for none
+# (DESIGN.md 2, v2 scope; automx/groupware.py).
 DEFAULT_SETTINGS = {
     "service_host": None,
     "http2https": True,
     "display_names": True,
+    "dav_module": None,
+    "activesync_module": None,
 }
 
 

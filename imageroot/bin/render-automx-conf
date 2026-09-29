@@ -37,7 +37,7 @@ import agent
 from agent.ldapproxy import Ldapproxy
 
 sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
-from automx import domains, mail, node as automx_node, state  # noqa: E402
+from automx import domains, groupware, mail, node as automx_node, state  # noqa: E402
 
 # The container reaches the host's ldapproxy loopback listener at this
 # address, not 127.0.0.1, because automx.service runs with
@@ -127,10 +127,37 @@ def main():
 
     write_ldap_lookup(ldap_lookup_path, ldap_domain, hidden_users_filter)
     write_automx_conf(
-        automx_conf_path, service_host, enabled_domains, mail_hostname, settings["display_names"]
+        automx_conf_path,
+        service_host,
+        enabled_domains,
+        mail_hostname,
+        settings["display_names"],
+        **groupware_urls(rdb, settings, mail_module_id, user_domain),
     )
 
     json.dump(enabled_domains, sys.stdout)
+
+
+def groupware_urls(rdb, settings, mail_module_id, user_domain):
+    """{"dav_url", "activesync_url"} for the configured groupware modules.
+    A module that was chosen but is no longer usable (removed, DAV switched
+    off, bound elsewhere) is left out with a warning rather than failing
+    the render: mail autoconfiguration must keep working without it."""
+    wanted = {"dav_url": settings.get("dav_module"), "activesync_url": settings.get("activesync_module")}
+    urls = {"dav_url": None, "activesync_url": None}
+    if not any(wanted.values()):
+        return urls  # no Redis scan, no Traefik call
+    candidates = groupware.list_candidates(rdb, mail_module_id, user_domain)
+    for service, module_id in wanted.items():
+        if not module_id:
+            continue
+        urls[service] = groupware.find(candidates, module_id, service)
+        if urls[service] is None:
+            print(
+                agent.SD_WARNING + f"{module_id} no longer provides {service.removesuffix('_url')}, not publishing it",
+                file=sys.stderr,
+            )
+    return urls
 
 
 def atomic_write(path, content, mode):
@@ -163,7 +190,9 @@ def write_ldap_lookup(path, ldap_domain, hidden_users_filter):
     atomic_write(path, json.dumps(lookup_config), mode=0o600)
 
 
-def write_automx_conf(path, service_host, enabled_domains, mail_hostname, display_names):
+def write_automx_conf(
+    path, service_host, enabled_domains, mail_hostname, display_names, dav_url=None, activesync_url=None
+):
     # interpolation=None: the script backend's argv template is a literal
     # "%u %d %s" (automx's own macros, not configparser's) -- with the
     # default BasicInterpolation, ConfigParser rejects a bare "%u" as an
@@ -203,6 +232,22 @@ def write_automx_conf(path, service_host, enabled_domains, mail_hostname, displa
     if display_names:
         global_section["account_name"] = "${display_name}"
         global_section["account_name_short"] = "${display_name}"
+
+    # Groupware endpoints (DESIGN.md 2, v2). The login is the same directory
+    # login as for mail. http-basic is what keeps CalDAV/CardDAV in Apple
+    # profiles: automx leaves a DAV service out of Mobileconfig when none of
+    # its auth methods is password-based.
+    if dav_url:
+        for prefix in ("caldav", "carddav"):
+            global_section[prefix] = "yes"
+            global_section[f"{prefix}_url"] = dav_url
+            global_section[f"{prefix}_auth"] = "http-basic"
+            global_section[f"{prefix}_auth_identity"] = "${login}"
+    if activesync_url:
+        global_section["activesync"] = "yes"
+        global_section["activesync_url"] = activesync_url
+        global_section["activesync_auth"] = "http-basic"
+        global_section["activesync_auth_identity"] = "${login}"
 
     config["global"] = global_section
 
