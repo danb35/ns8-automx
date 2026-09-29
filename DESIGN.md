@@ -73,7 +73,9 @@ The module:
 - The map directory, not the file, is bind-mounted: an atomic replace creates a new inode, which a single-file mount would never see. The lookup script reads the file on each request, so no restart is needed.
 - New setting `resolve_aliases`, on by default like `display_names`: it tells an anonymous requester which login is behind an alias (8). Off writes an empty map.
 
-**VERIFY on a real node:** the timer and service start with automx and stop with it; a new alias shows up within 15 minutes without a restart; SELinux lets the container read a file created in the mounted directory after the container started.
+**Real node (2026-09-29, LAN test node, `tests/integration` `test_05`/`test_05b`):** the timer runs with automx, the map comes out as `{"fred.flintstone@2v6.in": "fred"}` from a real mail-module alias, the container reads the file written into the mounted directory after it started (SELinux included), the alias resolves to `fred`, and turning `resolve_aliases` off brings back the bare-address fallback without a restart. `get-status` now also lists `automx-aliases` as an (inactive) service, like ns8-mail's timer oneshots.
+
+**VERIFY on a real node:** a newly added alias shows up within 15 minutes without a restart.
 
 ### Out of scope for v2 (possible later)
 
