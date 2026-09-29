@@ -131,7 +131,7 @@ class LookupTests(unittest.TestCase):
         out, _ = self.run_lookup(conn, ["dan", "example.com", "dan@example.com"])
         self.assertEqual(out, "dan|Dan Brown\n")
         self.assertEqual(conn.search_calls[0]["filter"], "(&(|(uid=dan)(mail=dan@example.com)))")
-        self.assertEqual(conn.search_calls[0]["attrs"], ["uid", "cn"])
+        self.assertEqual(conn.search_calls[0]["attrs"], ["uid", "displayName", "cn"])
         self.assertTrue(conn.unbound)
 
     def test_rfc2307_match_by_mail_attribute_for_an_alias(self):
@@ -206,13 +206,30 @@ class LookupTests(unittest.TestCase):
             module.main()
         self.assertEqual(out.getvalue(), "dan@example.com|\n")
 
+    def test_rfc2307_prefers_display_name_over_cn(self):
+        # NS8's OpenLDAP, found on a real node: displayName has the full
+        # name, cn only its first part plus a newline, sn the rest.
+        self.write_config(schema="rfc2307")
+        conn = FakeConnection(search_results=[(
+            "uid=tester,ou=People,dc=example,dc=com",
+            {"uid": [b"tester"], "cn": [b"Test\n"], "displayName": [b"Test User"]},
+        )])
+        out, _ = self.run_lookup(conn, ["tester", "example.com", "tester@example.com"])
+        self.assertEqual(out, "tester|Test User\n")
+
+    def test_line_breaks_in_a_name_do_not_end_the_output_line(self):
+        self.write_config(schema="rfc2307")
+        conn = FakeConnection(search_results=[("dn", {"uid": [b"dan"], "cn": [b"Dan\nBrown\n"]})])
+        out, _ = self.run_lookup(conn, ["dan", "example.com", "dan@example.com"])
+        self.assertEqual(out, "dan|Dan Brown\n")
+
     def test_display_name_with_pipe_is_stripped_not_left_to_break_the_separator(self):
         self.write_config()
         conn = FakeConnection(
             search_results=[("dn", {"uid": [b"dan"], "cn": [b"Dan | Brown"]})]
         )
         out, _ = self.run_lookup(conn, ["dan", "example.com", "dan@example.com"])
-        self.assertEqual(out, "dan|Dan  Brown\n")
+        self.assertEqual(out, "dan|Dan Brown\n")
 
     def test_wrong_argv_count_falls_back_without_crashing(self):
         module = load_module_fresh()
