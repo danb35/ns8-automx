@@ -86,6 +86,8 @@ The module:
 - **Renewal.** A `certificate-changed` handler (the same pattern as ns8-mail's) re-renders when the event names the service host; `reload-automx` restarts automx only if the material changed.
 - **Setting** `sign_profiles`, off by default: it puts the service host's TLS private key inside the automx container.
 
+**Real node (2026-09-29, LAN test node, Rocky 9):** `certadm` was granted on install (`get-certificate` answered). With no certificate for the node FQDN, the status is `no_certificate` and profiles stay unsigned. Uploading a test RSA certificate for the node FQDN to Traefik fired `certificate-changed`; the handler re-rendered within ~20 s without any other action, the key file is 0600, the status reads `custom`, `trusted: false`, and the served profile is a valid CMS signature by that certificate. **Found:** ns8-traefik's `delete-certificate` publishes no `certificate-changed` (ns8-mail doesn't react to a delete either), so after a certificate is deleted automx keeps signing with the copy it has until its next render (any `configure-module`, `set-domains` or restart), which then drops it. Accepted as is: the copy is still a valid certificate.
+
 **VERIFY on a real node:** `certadm` is granted on update as well as on install; the Let's Encrypt certificate passes `openssl verify` on Rocky and Debian nodes; `certificate-changed` fires on renewal with the node FQDN in `names`; iOS and macOS show the signed profile as verified.
 
 ### Out of scope for v2 (possible later)
