@@ -97,11 +97,38 @@
     "http_to_https": "Redirecionar HTTP para HTTPS",
     "display_names": "Incluir nomes de exibição",
     "display_names_tooltip": "Obtido do LDAP para o endereço perguntado por um cliente.",
+    "resolve_aliases": "Resolver aliases de e-mail",
+    "resolve_aliases_tooltip": "Para um alias que entrega a um único usuário, é fornecido o nome de login desse usuário. Aliases compartilhados por vários usuários não são resolvidos.",
     "display_names_notice_title": "Divulgação não autenticada",
-    "display_names_notice_description": "Os endpoints de configuração automática respondem a qualquer solicitação, sem senha. Com esta opção ativada, um nome de exibição é incluído para o endereço consultado, junto com os nomes do servidor de e-mail. Desative para reduzir o que uma solicitação anônima revela, ao custo de os clientes mostrarem o endereço bruto em vez de um nome.",
+    "display_names_notice_description": "Os endpoints de configuração automática respondem a qualquer solicitação, sem senha. Com os nomes de exibição ativados, um nome de exibição é incluído para o endereço consultado, junto com os nomes do servidor de e-mail; com a resolução de aliases ativada, o nome de login por trás de um alias também é incluído. Desative-os para reduzir o que uma solicitação anônima revela, ao custo de os clientes mostrarem o endereço bruto em vez de um nome, ou de os usuários de um alias precisarem digitar o próprio nome de login.",
     "enabled": "Habilitado",
     "disabled": "Desabilitado",
-    "configuring": "Configurando"
+    "configuring": "Configurando",
+    "groupware_title": "Calendários, contatos e ActiveSync",
+    "groupware_description": "Publicar também o endpoint CalDAV/CardDAV ou ActiveSync de um aplicativo de groupware, para que os clientes os configurem junto com o e-mail. Os usuários fazem login com o mesmo nome de usuário do e-mail.",
+    "dav_module": "Provedor de CalDAV/CardDAV",
+    "activesync_module": "Provedor de ActiveSync",
+    "groupware_none": "Nenhum",
+    "groupware_none_found_title": "Nenhum aplicativo de groupware encontrado",
+    "groupware_none_found_description": "Nextcloud, SOGo ou WebTop podem ser oferecidos aqui depois de instalados, configurados com um nome de host e vinculados ao mesmo domínio de usuários do servidor de e-mail. O ActiveSync também exige que o SOGo ou o WebTop usem este servidor de e-mail. O Nextcloud precisa estar em execução neste nó.",
+    "kind_nextcloud": "Nextcloud",
+    "kind_sogo": "SOGo",
+    "kind_webtop": "WebTop",
+    "sign_profiles": "Assinar os perfis da Apple",
+    "sign_profiles_tooltip": "Assina os perfis .mobileconfig baixados com o certificado do host do serviço, para que os dispositivos Apple os mostrem como verificados. Isso coloca a chave privada desse certificado no contêiner do automx.",
+    "signing_ok_title": "Os perfis estão assinados",
+    "signing_ok_description": "Os perfis da Apple são assinados com o certificado de {host}.",
+    "signing_untrusted_title": "Certificado não confiável",
+    "signing_untrusted_description": "Os perfis são assinados com o certificado de {host}, mas este servidor não confia nesse certificado, então os dispositivos provavelmente mostrarão o perfil como não verificado.",
+    "signing_skipped_title": "Os perfis não estão assinados",
+    "signing_problem_no_certificate": "Ainda não há certificado para {host}. Os perfis serão assinados assim que houver um, emitido pelo Let's Encrypt ou enviado nas configurações de certificados.",
+    "signing_problem_not_available": "Não foi possível ler o certificado de {host}. Consulte os logs para mais detalhes.",
+    "signing_problem_unreadable": "Não foi possível ler o certificado ou a chave de {host}.",
+    "signing_problem_not_rsa": "O certificado de {host} não usa uma chave RSA, que é necessária para assinar perfis.",
+    "signing_problem_key_too_small": "A chave do certificado de {host} tem menos de 2048 bits.",
+    "signing_problem_key_mismatch": "O certificado de {host} não corresponde à sua chave.",
+    "signing_problem_expired": "O certificado de {host} expirou ou ainda não é válido.",
+    "signing_problem_no_digital_signature": "O certificado de {host} não permite assinaturas digitais."
   },
   "about": {
     "title": "Sobre"
@@ -152,6 +179,7 @@
     "auth_failed": "Falha na autenticação com o provedor de DNS",
     "unsupported": "Não suportado por este provedor de DNS",
     "invalid_request": "Solicitação inválida",
-    "unknown_provider": "Provedor de DNS desconhecido"
+    "unknown_provider": "Provedor de DNS desconhecido",
+    "groupware_not_available": "Esse aplicativo não fornece este serviço para o servidor de e-mail."
   }
 }
