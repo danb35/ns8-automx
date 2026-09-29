@@ -32,12 +32,16 @@ def _settings_path():
 # dav_module/activesync_module: the groupware module (e.g. "sogo1") whose
 # CalDAV/CardDAV or ActiveSync endpoint is published, or null for none
 # (DESIGN.md 2, v2 scope; automx/groupware.py).
+# resolve_aliases: hand out the owner's login for a mail alias that
+# delivers to one user (automx/aliases.py); on by default, with the same
+# disclosure trade-off as display_names.
 DEFAULT_SETTINGS = {
     "service_host": None,
     "http2https": True,
     "display_names": True,
     "dav_module": None,
     "activesync_module": None,
+    "resolve_aliases": True,
 }
 
 

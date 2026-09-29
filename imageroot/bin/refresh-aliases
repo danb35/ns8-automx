@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Writes state/aliases/aliases.json, the alias -> login map that
+# automx-ldap-lookup reads inside the container (automx/aliases.py).
+#
+# ns8-mail publishes no event when an address is added or changed (only
+# configure-module fires mail-settings-changed), so this runs from
+# automx-aliases.timer, shortly after automx starts and then every 15
+# minutes, and from reconcile() after a settings or domain change.
+#
+# The map sits in a directory bind-mounted into the container, not a
+# single-file mount: the file is replaced atomically (a new inode), which a
+# file mount would never see, while a directory mount does. The lookup
+# script reads it on every request, so no restart is needed.
+#
+# Always exits 0: a failed refresh keeps the previous map, which is better
+# than none, and must not show as a failed unit.
+
+import json
+import os
+import sys
+
+import agent
+
+sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
+from automx import aliases, domains, mail, state  # noqa: E402
+
+ALIASES_DIR = os.path.join(state.STATE_DIR, "aliases")
+ALIASES_PATH = os.path.join(ALIASES_DIR, "aliases.json")
+
+
+def write_map(alias_map):
+    os.makedirs(ALIASES_DIR, exist_ok=True)
+    tmp_path = f"{ALIASES_PATH}.{os.getpid()}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(alias_map, f)
+    os.chmod(tmp_path, 0o640)
+    os.replace(tmp_path, ALIASES_PATH)
+
+
+def build():
+    if not state.load_settings()["resolve_aliases"]:
+        return {}
+    rdb = agent.redis_connect(use_replica=True)
+    mail_module_id, _hostname, _user_domain, mail_domain_names = mail.get_instance_info(rdb)
+    enabled = domains.enabled_usable(mail_domain_names, state.load_domains())
+    if not enabled:
+        return {}
+    response = agent.tasks.run(
+        f"module/{mail_module_id}",
+        action="list-addresses",
+        data={},
+        extra={"isNotificationHidden": True},
+    )
+    agent.assert_exp(response["exit_code"] == 0, "mail list-addresses failed")
+    return aliases.build_map(response["output"]["addresses"], enabled)
+
+
+def main():
+    try:
+        alias_map = build()
+    except (mail.MailNotFound, mail.MailNotConfigured):
+        alias_map = {}
+    except Exception as exc:
+        print(agent.SD_WARNING + f"could not refresh the alias map, keeping the previous one: {exc}", file=sys.stderr)
+        return
+    write_map(alias_map)
+
+
+if __name__ == "__main__":
+    main()

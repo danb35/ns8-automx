@@ -214,5 +214,14 @@ class ReconcileDnsGateTests(unittest.TestCase):
         self.assertEqual(self.mocks["routes.set_domain_routes"].call_args.args[1], "a.example")
 
 
+    def test_alias_map_refresh_is_started_without_blocking(self):
+        # automx-aliases.service calls the mail module; reconcile must only
+        # queue it (--no-block), not wait for it while holding the lock.
+        self._patch("routes", "domain_route_exists", return_value=True)
+        with mock.patch.object(reconcile.agent, "run_helper") as run_helper:
+            reconcile.reconcile_locked(None)
+        run_helper.assert_any_call("systemctl", "--user", "start", "--no-block", "automx-aliases.service")
+
+
 if __name__ == "__main__":
     unittest.main()

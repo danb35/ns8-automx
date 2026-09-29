@@ -66,6 +66,17 @@ The module:
 3. Thunderbird still picks IMAP when Autoconfig also lists an `activeSync` incoming server.
 4. Outlook and phones configure ActiveSync from the MobileSync Autodiscover response.
 
+**Alias resolution (implemented 2026-09-29, not yet real-node tested).** `imageroot/bin/refresh-aliases` builds `{"alias@domain": "login"}` (`automx/aliases.py`) from the mail module's `list-addresses` (covered by `mailadm`'s `list-*`) and writes `state/aliases/aliases.json`; `automx-ldap-lookup` checks it first and, for an alias, looks up only the owner's login in LDAP (for the display name), keeping the owner's login even when LDAP fails.
+
+- Read from `NethServer/ns8-mail` `pypkg/mail.py`: a user destination is `{"dtype": "user", "name": <login>}` (the schema's own examples still show a `user` key; the encoder writes `name`). Mapped: `atype` `domain` (for an enabled domain) and `wildcard` (every enabled domain; a domain-specific address wins, as in Postfix's lookup) with exactly one user destination. Not mapped: shared aliases (several users, a group, a public folder, an external address), and the generated `adduser`/`addalias` addresses, which the LDAP rule already resolves.
+- ns8-mail publishes no event when an address changes, so `automx-aliases.timer` refreshes the map 5 s after automx starts and every 15 minutes (`PartOf=automx.service`, pulled in by its `Wants=`), and `reconcile()` starts a refresh without blocking after every change. `list-addresses` can be slow (it lists LDAP users), so it is kept out of the render and restart path entirely.
+- The map directory, not the file, is bind-mounted: an atomic replace creates a new inode, which a single-file mount would never see. The lookup script reads the file on each request, so no restart is needed.
+- New setting `resolve_aliases`, on by default like `display_names`: it tells an anonymous requester which login is behind an alias (8). Off writes an empty map.
+
+**Real node (2026-09-29, LAN test node, `tests/integration` `test_05`/`test_05b`):** the timer runs with automx, the map comes out as `{"fred.flintstone@2v6.in": "fred"}` from a real mail-module alias, the container reads the file written into the mounted directory after it started (SELinux included), the alias resolves to `fred`, and turning `resolve_aliases` off brings back the bare-address fallback without a restart. `get-status` now also lists `automx-aliases` as an (inactive) service, like ns8-mail's timer oneshots.
+
+**VERIFY on a real node:** a newly added alias shows up within 15 minutes without a restart.
+
 ### Out of scope for v2 (possible later)
 
 - PACC (`_ua-auto-config` TXT record and JSON). It is an Internet-Draft and its TXT digest is byte-sensitive to the served configuration.
@@ -540,7 +551,6 @@ Not separately broken out in this pass: whether Outlook's Autodiscover specifica
 ## 12. Later phases
 
 - PACC TXT record and JSON, once the drafts stabilize (needs the cache-safe TXT rollover described in automx's migration guide).
-- Alias resolution: generate a map from the mail module's addresses at render time and serve it through automx's bounded `script` backend, so an alias resolves to its owner's login.
 - Several mail instances and user domains (per-domain sections in `automx.conf`).
 - Mobileconfig signing with a configured certificate.
 - Autodiscover v2, OAuth public-client metadata.

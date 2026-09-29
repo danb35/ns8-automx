@@ -12,6 +12,7 @@
         "mail_hostname",
         "user_domain",
         "dnshelper_present",
+        "resolve_aliases",
         "dav_module",
         "activesync_module",
         "groupware"
@@ -104,6 +105,9 @@
                     }
                 }
             }
+        },
+        "resolve_aliases": {
+            "type": "boolean"
         }
     }
 }

@@ -31,6 +31,11 @@ import sys
 CONFIG_PATH = os.environ.get(
     "AUTOMX_LDAP_LOOKUP_CONFIG", "/etc/automx/ldap-lookup.json"
 )
+# {"alias@domain": "login"}, written on the host by refresh-aliases
+# (automx/aliases.py). Optional: absent or unreadable means no aliases.
+ALIASES_PATH = os.environ.get(
+    "AUTOMX_ALIASES", "/etc/automx/aliases/aliases.json"
+)
 
 # rfc2307 (OpenLDAP) vs ad (Samba AD) attribute mapping -- DESIGN.md 3.3.
 # "names" is tried in order. NS8's OpenLDAP keeps the full name in
@@ -61,7 +66,21 @@ def fallback(email_address):
     emit(email_address)
 
 
-def lookup(local_part, domain, email_address):
+def alias_login(email_address):
+    """The login an alias delivers to, or None."""
+    try:
+        with open(ALIASES_PATH, encoding="utf-8") as f:
+            alias_map = json.load(f)
+        login = alias_map.get(email_address.lower())
+    except Exception:
+        return None
+    return login if isinstance(login, str) and login else None
+
+
+def lookup(local_part, domain, email_address, aliased=False):
+    """(login, display_name) of the matching entry, or None. With aliased,
+    local_part is already the alias owner's login, so only the login
+    attribute is matched: the alias address itself is not in LDAP."""
     with open(CONFIG_PATH, encoding="utf-8") as f:
         config = json.load(f)
 
@@ -83,10 +102,11 @@ def lookup(local_part, domain, email_address):
         local_esc = ldap.filter.escape_filter_chars(local_part)
         mail_esc = ldap.filter.escape_filter_chars(email_address)
         hidden_clause = config.get("hidden_users_filter") or ""
-        search_filter = (
-            f"(&(|({attrs['login']}={local_esc})({attrs['mail']}={mail_esc}))"
-            f"{hidden_clause})"
-        )
+        if aliased:
+            match = f"({attrs['login']}={local_esc})"
+        else:
+            match = f"(|({attrs['login']}={local_esc})({attrs['mail']}={mail_esc}))"
+        search_filter = f"(&{match}{hidden_clause})"
 
         results = conn.search_s(
             config["base_dn"],
@@ -121,19 +141,29 @@ def main():
         fallback(sys.argv[-1] if len(sys.argv) > 1 else "")
         return
 
-    _local_part, _domain, email_address = sys.argv[1:4]
+    local_part, domain, email_address = sys.argv[1:4]
+
+    # A mail alias (DESIGN.md 3.3) resolves to its owner's login first; the
+    # directory then only supplies the display name.
+    owner = alias_login(email_address)
 
     try:
-        found = lookup(*sys.argv[1:4])
+        if owner:
+            found = lookup(owner, domain, email_address, aliased=True)
+        else:
+            found = lookup(local_part, domain, email_address)
     except Exception:
         # Connection refused, bind failure, timeout, malformed config file,
         # missing python-ldap, anything -- all fall back the same way.
         found = None
 
-    if found is None:
-        fallback(email_address)
-    else:
+    if found is not None:
         emit(*found)
+    elif owner:
+        # The alias map already names the login; only the name is missing.
+        emit(owner)
+    else:
+        fallback(email_address)
 
 
 if __name__ == "__main__":

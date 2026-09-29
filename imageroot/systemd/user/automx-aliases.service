@@ -1,0 +1,17 @@
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Refreshes the alias -> login map automx-ldap-lookup reads (see
+# imageroot/bin/refresh-aliases). Started by automx-aliases.timer and by
+# reconcile() after a settings or domain change.
+
+[Unit]
+Description=Refresh the automx mail alias map
+
+[Service]
+Type=oneshot
+EnvironmentFile=-%S/state/environment
+WorkingDirectory=%S/state
+ExecStart=runagent refresh-aliases

@@ -1,0 +1,17 @@
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# ns8-mail publishes no event when an address changes, so the alias map is
+# refreshed on a schedule: shortly after automx starts, then every 15
+# minutes. automx.service pulls this timer in (Wants=) and PartOf= stops
+# it again with the service, so it only runs while automx does.
+
+[Unit]
+Description=Periodic refresh of the automx mail alias map
+PartOf=automx.service
+
+[Timer]
+OnActiveSec=5s
+OnUnitActiveSec=15min

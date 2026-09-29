@@ -66,6 +66,23 @@
                 $t("settings.enabled")
               }}</template>
             </NsToggle>
+            <NsToggle
+              value="resolveAliases"
+              :label="$t('settings.resolve_aliases')"
+              v-model="isResolveAliasesEnabled"
+              :disabled="stillLoading"
+              class="mg-bottom"
+            >
+              <template #tooltip>
+                {{ $t("settings.resolve_aliases_tooltip") }}
+              </template>
+              <template slot="text-left">{{
+                $t("settings.disabled")
+              }}</template>
+              <template slot="text-right">{{
+                $t("settings.enabled")
+              }}</template>
+            </NsToggle>
             <NsInlineNotification
               kind="info"
               :title="$t('settings.display_names_notice_title')"
@@ -174,6 +191,7 @@ export default {
       serviceHost: "",
       isHttpToHttpsEnabled: true,
       isDisplayNamesEnabled: true,
+      isResolveAliasesEnabled: true,
       davModule: "",
       activesyncModule: "",
       groupware: [],
@@ -226,6 +244,7 @@ export default {
         this.serviceHost = config.service_host || "";
         this.isHttpToHttpsEnabled = config.http2https;
         this.isDisplayNamesEnabled = config.display_names;
+        this.isResolveAliasesEnabled = config.resolve_aliases;
         this.davModule = config.dav_module || "";
         this.activesyncModule = config.activesync_module || "";
         this.groupware = config.groupware;
@@ -243,6 +262,7 @@ export default {
             service_host: this.serviceHost || null,
             http2https: this.isHttpToHttpsEnabled,
             display_names: this.isDisplayNamesEnabled,
+            resolve_aliases: this.isResolveAliasesEnabled,
             dav_module: this.davModule || null,
             activesync_module: this.activesyncModule || null,
           },

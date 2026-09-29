@@ -24,7 +24,7 @@
 
 [Unit]
 Description=Podman automx.service
-Wants=network-online.target
+Wants=network-online.target automx-aliases.timer
 After=network-online.target
 
 [Service]
@@ -51,6 +51,9 @@ ExecStartPre=/bin/rm -f %t/automx.pid %t/automx.ctr-id
 # every service start"), so a stale/missing render never leaves the old
 # container config silently running past a state change.
 ExecStartPre=runagent render-automx-conf
+# The alias map directory is mounted, not the file inside it: the map is
+# replaced atomically while the container runs (imageroot/bin/refresh-aliases).
+ExecStartPre=/bin/mkdir -p %S/state/aliases
 ExecStart=/usr/bin/podman run --conmon-pidfile %t/automx.pid \
     --cidfile %t/automx.ctr-id --cgroups=no-conmon \
     --replace -d --name automx \
@@ -60,6 +63,7 @@ ExecStart=/usr/bin/podman run --conmon-pidfile %t/automx.pid \
     --read-only --tmpfs /tmp:size=16m,mode=1777 \
     --volume %S/state/automx.conf:/etc/automx/automx.conf:ro,Z \
     --volume %S/state/ldap-lookup.json:/etc/automx/ldap-lookup.json:ro,Z \
+    --volume %S/state/aliases:/etc/automx/aliases:ro,Z \
     ${AUTOMX_APP_IMAGE}
 # `podman run -d` returns as soon as the container exists, and Type=forking
 # then calls the unit active -- before automx is listening, so a request

@@ -204,6 +204,12 @@ Open **Settings**.
   password, by protocol design, this is also a small amount of address-to-name
   disclosure to anyone who asks. Turn it off if you'd rather trade that away for clients
   showing the raw email address instead of a name.
+- **Resolve mail aliases** — on by default. When someone sets up an alias address that
+  delivers to one user (for example `dan.brown@` for user `dan`), the client is given that
+  user's login, so they don't have to type it. An alias shared by several users can't be
+  resolved; its users still type their own login. Like display names, this tells anyone
+  who asks which login is behind an alias; turn it off if you'd rather not. New or changed
+  aliases are picked up within 15 minutes.
 
 ### Calendars, contacts and ActiveSync
 
