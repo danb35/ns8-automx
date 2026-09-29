@@ -55,7 +55,11 @@ images+=("${automxappimage}")
 # exercises automx-ldap-lookup's fallback path (DESIGN.md 3.3) on every
 # build, not just the render logic in isolation (tests/unit/ covers that).
 echo "Smoke-checking the automx-app image against a synthetic config..."
-smokecontainer=$(buildah from "${automxappimage}")
+# --pull=never: check (and later push) the image just built. Without it,
+# buildah pulled ghcr.io/<owner>/automx-app:latest from the registry here,
+# replacing the fresh build, so CI kept smoke-checking and republishing
+# the first image ever pushed under every new tag.
+smokecontainer=$(buildah from --pull=never "${automxappimage}")
 smokeemail="dan@ci-smoke-test.test"
 buildah copy "${smokecontainer}" tests/fixtures/synthetic-automx.conf /etc/automx/automx.conf
 buildah run "${smokecontainer}" -- \
