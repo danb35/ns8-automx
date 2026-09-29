@@ -19,7 +19,9 @@ import agent
 
 def get_node_fqdn():
     node_agent_id = agent.resolve_agent_id("node")
-    response = agent.tasks.run(node_agent_id, action="get-fqdn", data={})
+    response = agent.tasks.run(
+        node_agent_id, action="get-fqdn", data={}, extra={"isNotificationHidden": True}
+    )
     agent.assert_exp(response["exit_code"] == 0, "node/get-fqdn failed")
     out = response["output"]
     return f"{out['hostname']}.{out['domain']}"

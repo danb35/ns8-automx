@@ -44,7 +44,9 @@ def find_instance():
 
 
 def _call(target, action, data):
-    response = agent.tasks.run(agent_id=target, action=action, data=data)
+    response = agent.tasks.run(
+        agent_id=target, action=action, data=data, extra={"isNotificationHidden": True}
+    )
     if response["exit_code"] == 0:
         return response["output"]
 
