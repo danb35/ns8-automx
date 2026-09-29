@@ -33,9 +33,14 @@ CONFIG_PATH = os.environ.get(
 )
 
 # rfc2307 (OpenLDAP) vs ad (Samba AD) attribute mapping -- DESIGN.md 3.3.
+# "names" is tried in order. NS8's OpenLDAP keeps the full name in
+# displayName, as ns8-core's own agent/ldapclient/rfc2307.py reads it; its
+# cn holds only the first part of the name (with a trailing newline), so
+# cn is only a fallback for entries without displayName. Found on a real
+# node, 2026-09-29: "Test User" was published as "Test".
 ATTR_MAP = {
-    "rfc2307": {"login": "uid", "mail": "mail", "name": "cn"},
-    "ad": {"login": "sAMAccountName", "mail": "mail", "name": "displayName"},
+    "rfc2307": {"login": "uid", "mail": "mail", "names": ("displayName", "cn")},
+    "ad": {"login": "sAMAccountName", "mail": "mail", "names": ("displayName",)},
 }
 
 LDAP_TIMEOUT_SECONDS = 5
@@ -46,8 +51,10 @@ def emit(login, display_name=""):
     # contain a space, so the default whitespace split would break it.
     # A literal "|" in a display name would break the split the other way,
     # so it's stripped rather than escaped (automx's script backend has no
-    # escaping mechanism of its own).
-    print(f"{login}|{display_name.replace('|', '')}")
+    # escaping mechanism of its own). Line breaks would end the one output
+    # line early, so they become spaces.
+    display_name = " ".join(display_name.replace("|", "").split())
+    print(f"{login}|{display_name}")
 
 
 def fallback(email_address):
@@ -85,7 +92,7 @@ def lookup(local_part, domain, email_address):
             config["base_dn"],
             ldap.SCOPE_SUBTREE,
             search_filter,
-            [attrs["login"], attrs["name"]],
+            [attrs["login"], *attrs["names"]],
         )
     finally:
         conn.unbind_s()
@@ -95,8 +102,12 @@ def lookup(local_part, domain, email_address):
         if not login_values:
             continue
         login = login_values[0].decode("utf-8")
-        name_values = entry.get(attrs["name"]) or [b""]
-        display_name = name_values[0].decode("utf-8")
+        display_name = ""
+        for name in attrs["names"]:
+            values = entry.get(name) or [b""]
+            display_name = values[0].decode("utf-8").strip()
+            if display_name:
+                break
         return login, display_name
 
     return None
