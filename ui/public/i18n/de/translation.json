@@ -97,11 +97,38 @@
     "http_to_https": "HTTP zu HTTPS umleiten",
     "display_names": "Anzeigenamen einschließen",
     "display_names_tooltip": "Aus LDAP abgerufen für die Adresse, nach der ein Client fragt.",
+    "resolve_aliases": "Mail-Aliasse auflösen",
+    "resolve_aliases_tooltip": "Für einen Alias, der an einen einzelnen Benutzer zustellt, wird dessen Anmeldename ausgegeben. Aliasse, die mehrere Benutzer teilen, werden nicht aufgelöst.",
     "display_names_notice_title": "Nicht authentifizierte Offenlegung",
-    "display_names_notice_description": "Autokonfigurationsendpunkte beantworten jede Anfrage, ohne Passwort. Wenn dies aktiviert ist, wird ein Anzeigename für die jeweils angefragte Adresse zusammen mit den Mailservernamen angegeben. Deaktivieren Sie es, um zu verringern, was eine anonyme Anfrage offenlegt, auf Kosten dessen, dass Clients die reine Adresse statt eines Namens anzeigen.",
+    "display_names_notice_description": "Autokonfigurationsendpunkte beantworten jede Anfrage, ohne Passwort. Mit aktivierten Anzeigenamen wird für die jeweils angefragte Adresse ein Anzeigename zusammen mit den Mailservernamen angegeben; mit aktivierter Alias-Auflösung zusätzlich der Anmeldename hinter einem Alias. Deaktivieren Sie diese Optionen, um zu verringern, was eine anonyme Anfrage offenlegt, auf Kosten dessen, dass Clients die reine Adresse statt eines Namens anzeigen oder Benutzer eines Alias ihren Anmeldenamen selbst eingeben müssen.",
     "enabled": "Aktiviert",
     "disabled": "Deaktiviert",
-    "configuring": "Wird konfiguriert"
+    "configuring": "Wird konfiguriert",
+    "groupware_title": "Kalender, Kontakte und ActiveSync",
+    "groupware_description": "Zusätzlich den CalDAV-/CardDAV- oder ActiveSync-Endpunkt einer Groupware-App veröffentlichen, damit Clients diese zusammen mit der Mail einrichten. Benutzer melden sich mit demselben Benutzernamen wie für die Mail an.",
+    "dav_module": "CalDAV-/CardDAV-Anbieter",
+    "activesync_module": "ActiveSync-Anbieter",
+    "groupware_none": "Keiner",
+    "groupware_none_found_title": "Keine Groupware-App gefunden",
+    "groupware_none_found_description": "Nextcloud, SOGo oder WebTop können hier angeboten werden, sobald sie installiert, mit einem Hostnamen konfiguriert und an dieselbe Benutzerdomäne wie der Mailserver gebunden sind. ActiveSync erfordert außerdem, dass SOGo oder WebTop diesen Mailserver verwenden. Nextcloud muss auf diesem Knoten laufen.",
+    "kind_nextcloud": "Nextcloud",
+    "kind_sogo": "SOGo",
+    "kind_webtop": "WebTop",
+    "sign_profiles": "Apple-Profile signieren",
+    "sign_profiles_tooltip": "Signiert heruntergeladene .mobileconfig-Profile mit dem Zertifikat des Dienst-Hosts, sodass Apple-Geräte sie als verifiziert anzeigen. Dadurch liegt der private Schlüssel dieses Zertifikats im automx-Container.",
+    "signing_ok_title": "Profile werden signiert",
+    "signing_ok_description": "Apple-Profile werden mit dem Zertifikat von {host} signiert.",
+    "signing_untrusted_title": "Zertifikat nicht vertrauenswürdig",
+    "signing_untrusted_description": "Profile werden mit dem Zertifikat von {host} signiert, aber dieser Server vertraut diesem Zertifikat nicht, daher zeigen Geräte das Profil vermutlich als nicht verifiziert an.",
+    "signing_skipped_title": "Profile werden nicht signiert",
+    "signing_problem_no_certificate": "Für {host} gibt es noch kein Zertifikat. Profile werden signiert, sobald eines vorhanden ist, entweder von Let's Encrypt ausgestellt oder in den Zertifikatseinstellungen hochgeladen.",
+    "signing_problem_not_available": "Das Zertifikat von {host} konnte nicht gelesen werden. Details finden Sie in den Protokollen.",
+    "signing_problem_unreadable": "Das Zertifikat oder der Schlüssel von {host} konnte nicht gelesen werden.",
+    "signing_problem_not_rsa": "Das Zertifikat von {host} verwendet keinen RSA-Schlüssel, der für das Signieren von Profilen erforderlich ist.",
+    "signing_problem_key_too_small": "Der Schlüssel des Zertifikats von {host} ist kürzer als 2048 Bit.",
+    "signing_problem_key_mismatch": "Das Zertifikat von {host} passt nicht zu seinem Schlüssel.",
+    "signing_problem_expired": "Das Zertifikat von {host} ist abgelaufen oder noch nicht gültig.",
+    "signing_problem_no_digital_signature": "Das Zertifikat von {host} erlaubt keine digitalen Signaturen."
   },
   "about": {
     "title": "Über"
@@ -152,6 +179,7 @@
     "auth_failed": "Authentifizierung beim DNS-Anbieter fehlgeschlagen",
     "unsupported": "Von diesem DNS-Anbieter nicht unterstützt",
     "invalid_request": "Ungültige Anfrage",
-    "unknown_provider": "Unbekannter DNS-Anbieter"
+    "unknown_provider": "Unbekannter DNS-Anbieter",
+    "groupware_not_available": "Diese App stellt diesen Dienst für den Mailserver nicht bereit."
   }
 }

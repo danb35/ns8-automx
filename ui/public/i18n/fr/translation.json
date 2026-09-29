@@ -97,11 +97,38 @@
     "http_to_https": "Rediriger HTTP vers HTTPS",
     "display_names": "Inclure les noms d'affichage",
     "display_names_tooltip": "Récupéré depuis LDAP pour l'adresse demandée par un client.",
+    "resolve_aliases": "Résoudre les alias de messagerie",
+    "resolve_aliases_tooltip": "Pour un alias qui distribue à un seul utilisateur, l'identifiant de cet utilisateur est fourni. Les alias partagés par plusieurs utilisateurs ne sont pas résolus.",
     "display_names_notice_title": "Divulgation non authentifiée",
-    "display_names_notice_description": "Les points de terminaison d'autoconfiguration répondent à toute demande, sans mot de passe. Lorsque cette option est activée, un nom d'affichage est inclus pour l'adresse demandée, ainsi que les noms des serveurs de messagerie. Désactivez-la pour réduire ce qu'une demande anonyme révèle, au prix de l'affichage par les clients de l'adresse brute plutôt que d'un nom.",
+    "display_names_notice_description": "Les points de terminaison d'autoconfiguration répondent à toute demande, sans mot de passe. Lorsque les noms d'affichage sont activés, un nom d'affichage est inclus pour l'adresse demandée, ainsi que les noms des serveurs de messagerie ; lorsque la résolution des alias est activée, l'identifiant derrière un alias est également inclus. Désactivez-les pour réduire ce qu'une demande anonyme révèle, au prix de l'affichage par les clients de l'adresse brute plutôt que d'un nom, ou de la saisie de leur identifiant par les utilisateurs d'un alias.",
     "enabled": "Activé",
     "disabled": "Désactivé",
-    "configuring": "Configuration en cours"
+    "configuring": "Configuration en cours",
+    "groupware_title": "Agendas, contacts et ActiveSync",
+    "groupware_description": "Publier aussi le point de terminaison CalDAV/CardDAV ou ActiveSync d'une application de travail collaboratif, pour que les clients les configurent en même temps que la messagerie. Les utilisateurs se connectent avec le même nom d'utilisateur que pour la messagerie.",
+    "dav_module": "Fournisseur CalDAV/CardDAV",
+    "activesync_module": "Fournisseur ActiveSync",
+    "groupware_none": "Aucun",
+    "groupware_none_found_title": "Aucune application de travail collaboratif trouvée",
+    "groupware_none_found_description": "Nextcloud, SOGo ou WebTop peuvent être proposés ici une fois installés, configurés avec un nom d'hôte et liés au même domaine d'utilisateurs que le serveur de messagerie. ActiveSync exige en outre que SOGo ou WebTop utilise ce serveur de messagerie. Nextcloud doit fonctionner sur ce nœud.",
+    "kind_nextcloud": "Nextcloud",
+    "kind_sogo": "SOGo",
+    "kind_webtop": "WebTop",
+    "sign_profiles": "Signer les profils Apple",
+    "sign_profiles_tooltip": "Signe les profils .mobileconfig téléchargés avec le certificat de l'hôte du service, pour que les appareils Apple les affichent comme vérifiés. La clé privée de ce certificat est alors placée dans le conteneur automx.",
+    "signing_ok_title": "Les profils sont signés",
+    "signing_ok_description": "Les profils Apple sont signés avec le certificat de {host}.",
+    "signing_untrusted_title": "Certificat non approuvé",
+    "signing_untrusted_description": "Les profils sont signés avec le certificat de {host}, mais ce serveur ne fait pas confiance à ce certificat : les appareils afficheront probablement le profil comme non vérifié.",
+    "signing_skipped_title": "Les profils ne sont pas signés",
+    "signing_problem_no_certificate": "Il n'y a pas encore de certificat pour {host}. Les profils seront signés dès qu'il y en aura un, émis par Let's Encrypt ou importé dans les paramètres des certificats.",
+    "signing_problem_not_available": "Le certificat de {host} n'a pas pu être lu. Consultez les journaux pour plus de détails.",
+    "signing_problem_unreadable": "Le certificat ou la clé de {host} n'a pas pu être lu.",
+    "signing_problem_not_rsa": "Le certificat de {host} n'utilise pas de clé RSA, ce que la signature des profils exige.",
+    "signing_problem_key_too_small": "La clé du certificat de {host} fait moins de 2048 bits.",
+    "signing_problem_key_mismatch": "Le certificat de {host} ne correspond pas à sa clé.",
+    "signing_problem_expired": "Le certificat de {host} a expiré ou n'est pas encore valide.",
+    "signing_problem_no_digital_signature": "Le certificat de {host} n'autorise pas les signatures numériques."
   },
   "about": {
     "title": "À propos"
@@ -152,6 +179,7 @@
     "auth_failed": "Échec de l'authentification auprès du fournisseur DNS",
     "unsupported": "Non pris en charge par ce fournisseur DNS",
     "invalid_request": "Requête invalide",
-    "unknown_provider": "Fournisseur DNS inconnu"
+    "unknown_provider": "Fournisseur DNS inconnu",
+    "groupware_not_available": "Cette application ne fournit pas ce service pour le serveur de messagerie."
   }
 }

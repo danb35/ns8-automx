@@ -121,7 +121,7 @@
     "signing_untrusted_title": "Certificate not trusted",
     "signing_untrusted_description": "Profiles are signed with the certificate of {host}, but this server does not trust that certificate, so devices will probably show the profile as unverified.",
     "signing_skipped_title": "Profiles are not signed",
-    "signing_problem_no_certificate": "There is no certificate for {host} yet. Profiles will be signed once Let's Encrypt has issued one.",
+    "signing_problem_no_certificate": "There is no certificate for {host} yet. Profiles will be signed once there is one, either issued by Let's Encrypt or uploaded in the certificate settings.",
     "signing_problem_not_available": "The certificate of {host} could not be read. See the logs for details.",
     "signing_problem_unreadable": "The certificate or key of {host} could not be read.",
     "signing_problem_not_rsa": "The certificate of {host} does not use an RSA key, which profile signing requires.",
