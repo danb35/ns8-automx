@@ -19,6 +19,7 @@ MAIL_DOMAIN = os.environ.get('MAIL_DOMAIN')
 TEST_USER_LOGIN = os.environ.get('TEST_USER_LOGIN')
 TEST_USER_MAIL = os.environ.get('TEST_USER_MAIL')
 TEST_ALIAS_MAIL = os.environ.get('TEST_ALIAS_MAIL')
+TEST_ALIAS_LOGIN = os.environ.get('TEST_ALIAS_LOGIN')
 DNSHELPER_MODULE_ID = os.environ.get('DNSHELPER_MODULE_ID')
 # A fresh install must come from a registry: the module's rootless podman storage is separate
 # from root's, so add-module cannot pull a localhost/ image built on the node (see
@@ -191,7 +192,9 @@ class NodeIntegration(unittest.TestCase):
 
         rc, status = api(cls.automx, 'get-status', None)
         self.assertEqual(rc, 0)
-        service = next(s for s in status['services'] if s['name'].startswith('automx'))
+        # By exact name: get-status lists every unit file, including the
+        # automx-aliases oneshot, which is inactive between timer runs.
+        service = next(s for s in status['services'] if s['name'] == 'automx')
         self.assertTrue(service['active'] and not service['failed'], service)
 
         route = '%s-autoconfig-%s-0' % (cls.automx, MAIL_DOMAIN)
@@ -247,14 +250,36 @@ class NodeIntegration(unittest.TestCase):
         self.assertEqual(out.get('path'), '/Autodiscover/Autodiscover.xml')
         self.assertTrue(route_exists('%s-node-autodiscover' % cls.automx))
 
-    def test_05_alias_falls_back_to_the_bare_address(self):
-        # DESIGN.md 3.3: an alias is not a valid login; the static fallback
-        # applies rather than a wrong login being offered.
-        if not TEST_ALIAS_MAIL:
-            self.skipTest('set TEST_ALIAS_MAIL to test the alias fallback path')
+    def test_05_alias_resolves_to_its_owner(self):
+        # DESIGN.md 2 (v2): an alias delivering to one user resolves to that
+        # user's login, from the map refresh-aliases writes. The refresh runs
+        # a few seconds after automx starts, so allow it a moment.
+        if not (TEST_ALIAS_MAIL and TEST_ALIAS_LOGIN):
+            self.skipTest('set TEST_ALIAS_MAIL and TEST_ALIAS_LOGIN to test alias resolution')
         cls = type(self)
-        body = curl_automx(cls.automx, '/mail/config-v1.1.xml?emailaddress=%s' % TEST_ALIAS_MAIL)
-        self.assertIn('<username>%s</username>' % TEST_ALIAS_MAIL, body)
+        expected = '<username>%s</username>' % TEST_ALIAS_LOGIN
+        for _ in range(12):
+            body = curl_automx(cls.automx, '/mail/config-v1.1.xml?emailaddress=%s' % TEST_ALIAS_MAIL)
+            if expected in body:
+                break
+            time.sleep(5)
+        self.assertIn(expected, body)
+        self.assertIn('automx-aliases.timer', ssh(
+            'runagent -m %s systemctl --user list-timers --all' % cls.automx).stdout)
+
+    def test_05b_alias_resolution_can_be_turned_off(self):
+        if not (TEST_ALIAS_MAIL and TEST_ALIAS_LOGIN):
+            self.skipTest('set TEST_ALIAS_MAIL and TEST_ALIAS_LOGIN to test alias resolution')
+        cls = type(self)
+        api(cls.automx, 'configure-module', {'resolve_aliases': False})
+        expected = '<username>%s</username>' % TEST_ALIAS_MAIL
+        for _ in range(12):
+            body = curl_automx(cls.automx, '/mail/config-v1.1.xml?emailaddress=%s' % TEST_ALIAS_MAIL)
+            if expected in body:
+                break
+            time.sleep(5)
+        api(cls.automx, 'configure-module', {'resolve_aliases': True})
+        self.assertIn(expected, body)
 
     def test_06_dns_status_reflects_dnshelper_presence(self):
         cls = type(self)
