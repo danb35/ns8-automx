@@ -1,6 +1,6 @@
 # ns8-automx: Design
 
-Status: draft v1, 2026-09-20. Audience: the developer (human or agent) implementing the module. Read `AGENTS.md`, `AGENTS-backend.md` and `AGENTS-frontend.md` first; this document assumes their conventions (pinned image tags, authorizations as labels in `build-images.sh`, Renovate, Robot tests, Vue 2 + Carbon UI).
+Status: draft v2, 2026-09-29. Audience: the developer (human or agent) implementing the module. Read `AGENTS.md`, `AGENTS-backend.md` and `AGENTS-frontend.md` first; this document assumes their conventions (pinned image tags, authorizations as labels in `build-images.sh`, Renovate, Robot tests, Vue 2 + Carbon UI).
 
 Items marked **VERIFY** are things the design depends on that were not confirmed from documentation while writing this. Resolve each before or during implementation and record the answer in this file.
 
@@ -28,13 +28,26 @@ The module:
 - DNS: CNAME and SRV records, checked and created through dnshelper if available, checked and shown for manual creation otherwise.
 - Admin UI: status, domains table, settings.
 
-### Out of scope for v1 (possible later)
-
-- PACC (`_ua-auto-config` TXT record and JSON). It is an Internet-Draft and its TXT digest is byte-sensitive to the served configuration.
-- Autodiscover v2 (experimental in automx), OAuth metadata, EWS/ActiveSync/JMAP/CalDAV/CardDAV publication.
-- Several mail instances at once.
+### Scope for v2
+- CalDAV and CardDAV in `.mobileconfig` profiles
+  - This is implemented in upstream 3.0b4
+  - Allow the admin to enable/disable providing these fields
+  - Allow the admin to select among whichever of Nextcloud, SOGo, and WebTop are installed, as targets (on the assumption that all three support CalDAV/CardDAV--verify this)
+  - Do not at this time provide a free-text field for a URL (e.g., to use a different backend, or one hosted elsewhere)
+- ActiveSync
+  - Allow the admin to enable/disable
+  - Allow the admin to select among whichever appropriate backends are installed (which I believe to be SOGo and WebTop, but verify)
 - Resolving mail aliases to login names (see 3.3, phase 2).
 - Mobileconfig CMS signing (needs a certificate and key; the profile is served unsigned in v1).
+  - I don't at this time want to obtain a certificate just for this purpose, so determine whether we can use the default system cert for this.
+  - Assuming we can use the default system cert, determine whether that's a trusted cert, and warn the admin if it isn't.
+  - Allow the admin to enable/disable.
+
+### Out of scope for v2 (possible later)
+
+- PACC (`_ua-auto-config` TXT record and JSON). It is an Internet-Draft and its TXT digest is byte-sensitive to the served configuration.
+- Autodiscover v2 (experimental in automx), OAuth metadata, EWS/JMAP publication.
+- Several mail instances at once.
 
 ## 3. Facts about NS8 that shape the design
 
