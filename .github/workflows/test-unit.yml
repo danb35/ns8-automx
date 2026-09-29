@@ -29,4 +29,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      # automx/signing.py runs in the NS8 agent's Python environment, whose
+      # cryptography depends on the node (39.0.0 on older cores, 46.0.3 on
+      # Debian 13). Test the oldest; newer ones run the other branch of
+      # signing._not_valid().
+      - run: python3 -m pip install cryptography==39.0.0
       - run: python3 -m unittest discover -s tests/unit -v

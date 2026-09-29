@@ -16,6 +16,19 @@ from automx import dnshelperclient, groupware, mail, state
 settings = state.load_settings()
 domains = state.load_domains()
 
+
+def signing_status():
+    # Written by render-automx-conf with the signing material; reflects the
+    # config automx is running (DESIGN.md 2, v2).
+    if not settings["sign_profiles"]:
+        return None
+    try:
+        with open(os.path.join(state.STATE_DIR, "signing", "status.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError):
+        return None
+
+
 rdb = agent.redis_connect(use_replica=True)
 try:
     mail_module_id, mail_hostname, user_domain_name, _domain_names = mail.get_instance_info(rdb)
@@ -31,6 +44,8 @@ json.dump(
         "http2https": settings["http2https"],
         "display_names": settings["display_names"],
         "resolve_aliases": settings["resolve_aliases"],
+        "sign_profiles": settings["sign_profiles"],
+        "signing": signing_status(),
         "dav_module": settings["dav_module"],
         "activesync_module": settings["activesync_module"],
         "groupware": candidates,

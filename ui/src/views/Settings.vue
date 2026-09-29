@@ -90,6 +90,31 @@
               :showCloseButton="false"
               class="mg-bottom maxwidth"
             />
+            <NsToggle
+              value="signProfiles"
+              :label="$t('settings.sign_profiles')"
+              v-model="isSignProfilesEnabled"
+              :disabled="stillLoading"
+              class="mg-bottom"
+            >
+              <template #tooltip>
+                {{ $t("settings.sign_profiles_tooltip") }}
+              </template>
+              <template slot="text-left">{{
+                $t("settings.disabled")
+              }}</template>
+              <template slot="text-right">{{
+                $t("settings.enabled")
+              }}</template>
+            </NsToggle>
+            <NsInlineNotification
+              v-if="signingNotice"
+              :kind="signingNotice.kind"
+              :title="signingNotice.title"
+              :description="signingNotice.description"
+              :showCloseButton="false"
+              class="mg-bottom maxwidth"
+            />
             <h4 class="mg-bottom">{{ $t("settings.groupware_title") }}</h4>
             <p class="mg-bottom maxwidth">
               {{ $t("settings.groupware_description") }}
@@ -192,6 +217,8 @@ export default {
       isHttpToHttpsEnabled: true,
       isDisplayNamesEnabled: true,
       isResolveAliasesEnabled: true,
+      isSignProfilesEnabled: false,
+      signing: null,
       davModule: "",
       activesyncModule: "",
       groupware: [],
@@ -209,6 +236,37 @@ export default {
     ...mapState(["instanceName", "core", "appName"]),
     stillLoading() {
       return this.loading.getConfiguration || this.loading.configureModule;
+    },
+    signingNotice() {
+      // Only for the saved setting: the status describes the running config.
+      if (!this.isSignProfilesEnabled || !this.signing) {
+        return null;
+      }
+      const host = this.signing.host;
+      if (this.signing.problem) {
+        return {
+          kind: "warning",
+          title: this.$t("settings.signing_skipped_title"),
+          description: this.$t(
+            "settings.signing_problem_" + this.signing.problem,
+            { host }
+          ),
+        };
+      }
+      if (this.signing.trusted === false) {
+        return {
+          kind: "warning",
+          title: this.$t("settings.signing_untrusted_title"),
+          description: this.$t("settings.signing_untrusted_description", {
+            host,
+          }),
+        };
+      }
+      return {
+        kind: "success",
+        title: this.$t("settings.signing_ok_title"),
+        description: this.$t("settings.signing_ok_description", { host }),
+      };
     },
     davProviders() {
       return this.groupware.filter((g) => g.dav_url);
@@ -245,6 +303,8 @@ export default {
         this.isHttpToHttpsEnabled = config.http2https;
         this.isDisplayNamesEnabled = config.display_names;
         this.isResolveAliasesEnabled = config.resolve_aliases;
+        this.isSignProfilesEnabled = config.sign_profiles;
+        this.signing = config.signing;
         this.davModule = config.dav_module || "";
         this.activesyncModule = config.activesync_module || "";
         this.groupware = config.groupware;
@@ -263,11 +323,13 @@ export default {
             http2https: this.isHttpToHttpsEnabled,
             display_names: this.isDisplayNamesEnabled,
             resolve_aliases: this.isResolveAliasesEnabled,
+            sign_profiles: this.isSignProfilesEnabled,
             dav_module: this.davModule || null,
             activesync_module: this.activesyncModule || null,
           },
           title: this.$t("settings.configuring"),
         });
+        await this.getConfiguration();
       } catch (err) {
         this.error.configureModule = err;
       }

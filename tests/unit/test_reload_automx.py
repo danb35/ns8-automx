@@ -73,7 +73,7 @@ class ReloadIdempotenceTests(unittest.TestCase):
         self.addCleanup(self.remove_files)
 
     def remove_files(self):
-        for base in (self.conf, self.lookup):
+        for base in reload_automx.RENDERED_PATHS:
             for path in (base, base + reload_automx.STAGING_SUFFIX):
                 try:
                     os.remove(path)
@@ -122,6 +122,57 @@ class ReloadIdempotenceTests(unittest.TestCase):
         write(self.lookup + reload_automx.STAGING_SUFFIX, "lookup")
         self.assertEqual(reload_automx.main(), 0)
         self.assertTrue(self.restarted())
+
+
+
+class SigningFilesTests(ReloadIdempotenceTests):
+    # Profile signing (DESIGN.md 2, v2) adds optional files to the render:
+    # present only while signing is on.
+
+    def setUp(self):
+        super().setUp()
+        os.makedirs(reload_automx.SIGNING_DIR, exist_ok=True)
+        self.cert = reload_automx.SIGNING_CERT_PATH
+        self.key = reload_automx.SIGNING_KEY_PATH
+
+    def test_turning_signing_on_installs_the_files_and_restarts(self):
+        self.install("conf", "lookup", "conf signed", "lookup")
+        write(self.cert + reload_automx.STAGING_SUFFIX, "cert")
+        write(self.key + reload_automx.STAGING_SUFFIX, "key")
+        self.assertEqual(reload_automx.main(), 0)
+        self.assertTrue(self.restarted())
+        with open(self.key) as f:
+            self.assertEqual(f.read(), "key")
+
+    def test_turning_signing_off_removes_the_live_files(self):
+        self.install("conf signed", "lookup", "conf", "lookup")
+        write(self.cert, "cert")
+        write(self.key, "key")
+        self.assertEqual(reload_automx.main(), 0)
+        self.assertTrue(self.restarted())
+        self.assertFalse(os.path.exists(self.cert))
+        self.assertFalse(os.path.exists(self.key))
+
+    def test_renewed_certificate_alone_restarts(self):
+        self.install("conf", "lookup", "conf", "lookup")
+        write(self.cert, "cert")
+        write(self.key, "key")
+        write(self.cert + reload_automx.STAGING_SUFFIX, "cert RENEWED")
+        write(self.key + reload_automx.STAGING_SUFFIX, "key RENEWED")
+        self.assertEqual(reload_automx.main(), 0)
+        self.assertTrue(self.restarted())
+
+    def test_failed_validation_keeps_the_live_signing_files(self):
+        reload_automx.run_validate.return_value = SimpleNamespace(returncode=1, stdout="", stderr="bad key")
+        self.install("conf", "lookup", "conf signed", "lookup")
+        write(self.cert, "old cert")
+        write(self.cert + reload_automx.STAGING_SUFFIX, "new cert")
+        with mock.patch("sys.stderr"):
+            self.assertEqual(reload_automx.main(), 1)
+        self.assertFalse(self.restarted())
+        with open(self.cert) as f:
+            self.assertEqual(f.read(), "old cert")
+        self.assertFalse(os.path.exists(self.cert + reload_automx.STAGING_SUFFIX))
 
 
 if __name__ == "__main__":

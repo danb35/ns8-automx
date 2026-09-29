@@ -10,7 +10,8 @@
             "display_names": true,
             "dav_module": "sogo1",
             "activesync_module": null,
-            "resolve_aliases": true
+            "resolve_aliases": true,
+            "sign_profiles": false
         }
     ],
     "type": [
@@ -59,6 +60,11 @@
             "type": "boolean",
             "title": "Resolve mail aliases",
             "description": "For a mail alias that delivers to exactly one user, hand out that user's login instead of the typed address. Like display names, this tells an anonymous requester which login is behind an alias (DESIGN.md 8); on by default."
+        },
+        "sign_profiles": {
+            "type": "boolean",
+            "title": "Sign Apple profiles",
+            "description": "Sign .mobileconfig profiles with the service host's certificate from Traefik, so Apple devices show them as verified. Puts that certificate's private key in the automx container; off by default."
         }
     }
 }

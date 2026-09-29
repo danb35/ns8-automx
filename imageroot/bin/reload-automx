@@ -26,6 +26,19 @@ STATE_DIR = os.environ["AGENT_STATE_DIR"]
 INSTALL_DIR = os.environ["AGENT_INSTALL_DIR"]
 AUTOMX_CONF_PATH = os.path.join(STATE_DIR, "automx.conf")
 LDAP_LOOKUP_PATH = os.path.join(STATE_DIR, "ldap-lookup.json")
+SIGNING_DIR = os.path.join(STATE_DIR, "signing")
+SIGNING_CERT_PATH = os.path.join(SIGNING_DIR, "cert.pem")
+SIGNING_KEY_PATH = os.path.join(SIGNING_DIR, "key.pem")
+# Everything render-automx-conf writes. The signing files exist only while
+# profile signing is on (DESIGN.md 2, v2): a staged file that is absent
+# means the live one goes too.
+RENDERED_PATHS = (
+    AUTOMX_CONF_PATH,
+    LDAP_LOOKUP_PATH,
+    SIGNING_CERT_PATH,
+    SIGNING_KEY_PATH,
+    os.path.join(SIGNING_DIR, "status.json"),
+)
 STAGING_SUFFIX = ".staging"
 
 
@@ -54,6 +67,12 @@ def run_validate(staged_conf_path, domain):
     # ephemeral validate container until exercised on a real node.
     uid = os.getuid()
     gid = os.getgid()
+    # automx loads the signing material while validating, so a staged
+    # certificate and key are mounted where automx.conf says they are.
+    signing_volumes = []
+    for path, name in ((SIGNING_CERT_PATH, "cert.pem"), (SIGNING_KEY_PATH, "key.pem")):
+        if os.path.exists(path + STAGING_SUFFIX):
+            signing_volumes += ["--volume", f"{path}{STAGING_SUFFIX}:/etc/automx/signing/{name}:ro,Z"]
     return subprocess.run(
         [
             "podman",
@@ -64,6 +83,7 @@ def run_validate(staged_conf_path, domain):
             f"{uid}:{gid}",
             "--volume",
             f"{staged_conf_path}:/etc/automx/automx.conf:ro,Z",
+            *signing_volumes,
             os.environ["AUTOMX_APP_IMAGE"],
             "config",
             "validate",
@@ -77,22 +97,37 @@ def run_validate(staged_conf_path, domain):
     )
 
 
+def _remove(path):
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+
+
 def discard_staged():
-    for path in (AUTOMX_CONF_PATH + STAGING_SUFFIX, LDAP_LOOKUP_PATH + STAGING_SUFFIX):
-        try:
-            os.remove(path)
-        except FileNotFoundError:
-            pass
+    for path in RENDERED_PATHS:
+        _remove(path + STAGING_SUFFIX)
 
 
 def staged_matches_installed():
-    for path in (AUTOMX_CONF_PATH, LDAP_LOOKUP_PATH):
+    for path in RENDERED_PATHS:
+        staged = path + STAGING_SUFFIX
+        if not os.path.exists(staged) and not os.path.exists(path):
+            continue  # e.g. signing off, before and after
         try:
-            if not filecmp.cmp(path + STAGING_SUFFIX, path, shallow=False):
+            if not filecmp.cmp(staged, path, shallow=False):
                 return False
         except FileNotFoundError:
             return False
     return True
+
+
+def promote_staged():
+    for path in RENDERED_PATHS:
+        if os.path.exists(path + STAGING_SUFFIX):
+            os.replace(path + STAGING_SUFFIX, path)
+        else:
+            _remove(path)
 
 
 def service_is_active():
@@ -101,11 +136,8 @@ def service_is_active():
 
 def stop_and_clear():
     agent.run_helper("systemctl", "--user", "stop", "automx.service")
-    for path in (AUTOMX_CONF_PATH, LDAP_LOOKUP_PATH):
-        try:
-            os.remove(path)
-        except FileNotFoundError:
-            pass
+    for path in RENDERED_PATHS:
+        _remove(path)
 
 
 def main():
@@ -157,8 +189,7 @@ def main():
             )
             return 1
 
-    os.replace(staged_conf_path, AUTOMX_CONF_PATH)
-    os.replace(LDAP_LOOKUP_PATH + STAGING_SUFFIX, LDAP_LOOKUP_PATH)
+    promote_staged()
 
     # Plain restart, not try-restart: this must also start the service the
     # first time a domain is enabled, when it isn't running yet.

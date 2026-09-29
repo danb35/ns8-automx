@@ -210,6 +210,12 @@ Open **Settings**.
   resolved; its users still type their own login. Like display names, this tells anyone
   who asks which login is behind an alias; turn it off if you'd rather not. New or changed
   aliases are picked up within 15 minutes.
+- **Sign Apple profiles** — off by default. Signs the profiles users download with this
+  server's own certificate (the one for the service host, normally from Let's Encrypt),
+  so iPhones and Macs show them as verified instead of unsigned. Below the switch,
+  Settings says whether profiles are actually being signed and, if not, why (for example,
+  no certificate yet, or a certificate type that can't be used for signing). Turning it on
+  places that certificate's private key inside the automx container.
 
 ### Calendars, contacts and ActiveSync
 
