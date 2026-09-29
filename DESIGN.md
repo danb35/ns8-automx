@@ -90,7 +90,9 @@ The module:
 
 **Public node (2026-09-29, ns8-test.2v6.in, Rocky 9):** with the node FQDN's real Let's Encrypt certificate the status is `internal`, `trusted: true`; the downloaded profile's CMS signature and chain (ns8-test.2v6.in, Let's Encrypt YR1, ISRG Root X1) verify with OpenSSL against macOS's trust store, and macOS `security cms` reports `GoodSignature`. `certadm` is also granted on update: an instance installed from 0.1.1 (without it) got 403 from `get-certificate` before updating to this build and succeeded after. A 403 there raises an exception rather than returning an exit code; the renderer records it as `not_available`.
 
-**VERIFY on a real node:** the Let's Encrypt certificate passes `openssl verify` on Debian nodes; `certificate-changed` fires on renewal with the node FQDN in `names`; iOS and macOS show the signed profile as verified when installing it.
+**Real device (2026-09-29):** an iPhone on iOS 26.7 shows the profile downloaded from ns8-test.2v6.in as signed, and the accounts in it work.
+
+**VERIFY on a real node:** the Let's Encrypt certificate passes `openssl verify` on Debian nodes; `certificate-changed` fires on renewal with the node FQDN in `names`; macOS shows the signed profile as verified.
 
 ### Out of scope for v2 (possible later)
 
