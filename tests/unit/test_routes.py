@@ -90,8 +90,59 @@ class DeleteRouteWarningTests(unittest.TestCase):
         self.tasks_run.return_value = {"exit_code": 1, "output": {}, "error": "boom"}
         with mock.patch("sys.stderr", new_callable=io.StringIO):
             routes.delete_domain_routes("automx1", "example.com")
-        expected = len(routes.AUTOCONFIG_PATHS) + 1  # + the autodiscover route
+        expected = len(routes.AUTOCONFIG_PATHS) + len(routes.AUTODISCOVER_PATHS)
         self.assertEqual(self.tasks_run.call_count, expected)
+
+    def test_delete_node_autodiscover_routes_removes_both_spellings(self):
+        self.tasks_run.return_value = {"exit_code": 0, "output": {}, "error": None}
+        routes.delete_node_autodiscover_routes("automx1")
+        deleted = [c.kwargs["data"]["instance"] for c in self.tasks_run.call_args_list]
+        self.assertEqual(deleted, ["automx1-node-autodiscover", "automx1-node-autodiscover-1"])
+
+
+class SetRoutesTests(unittest.TestCase):
+    # Traefik path matching is case-sensitive (DESIGN.md 3.4), so each
+    # Autodiscover spelling needs its own route on both hosts.
+
+    def setUp(self):
+        os.environ.setdefault("TCP_PORT", "20001")
+        self.set_route = mock.Mock(return_value={"exit_code": 0})
+        patcher = mock.patch.object(routes.agent, "set_route", self.set_route)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _routes(self):
+        return [(c.args[0]["instance"], c.args[0]["host"], c.args[0]["path"]) for c in self.set_route.call_args_list]
+
+    def test_domain_routes_include_both_autodiscover_spellings(self):
+        self.assertEqual(routes.set_domain_routes("automx1", "example.com", True), [])
+        created = self._routes()
+        self.assertIn(
+            ("automx1-autodiscover-example.com-0", "autodiscover.example.com", "/autodiscover/autodiscover.xml"),
+            created,
+        )
+        self.assertIn(
+            ("automx1-autodiscover-example.com-1", "autodiscover.example.com", "/Autodiscover/Autodiscover.xml"),
+            created,
+        )
+
+    def test_node_routes_keep_the_original_instance_name_for_the_lowercase_path(self):
+        self.assertEqual(routes.set_node_autodiscover_routes("automx1", "node.example.com", True), [])
+        self.assertEqual(
+            self._routes(),
+            [
+                ("automx1-node-autodiscover", "node.example.com", "/autodiscover/autodiscover.xml"),
+                ("automx1-node-autodiscover-1", "node.example.com", "/Autodiscover/Autodiscover.xml"),
+            ],
+        )
+
+    def test_node_route_failures_are_reported_per_instance(self):
+        failed = {"exit_code": 1, "error": "acme"}
+        self.set_route.side_effect = [{"exit_code": 0}, failed]
+        self.assertEqual(
+            routes.set_node_autodiscover_routes("automx1", "node.example.com", True),
+            [("automx1-node-autodiscover-1", failed)],
+        )
 
 
 if __name__ == "__main__":

@@ -134,9 +134,8 @@ class ReconcileDnsGateTests(unittest.TestCase):
         self._patch("mail", "get_instance_info", return_value=patches["mail.get_instance_info"])
         self._patch("node", "get_node_fqdn", return_value=patches["node.get_node_fqdn"])
         self._patch("dnshelperclient", "find_instance", return_value=patches["dnshelperclient.find_instance"])
-        self._patch("routes", "set_node_autodiscover_route", return_value={"exit_code": 0})
-        self._patch("routes", "node_autodiscover_instance", return_value="automx1-node-autodiscover")
-        self._patch("routes", "delete_node_autodiscover_route", return_value=None)
+        self._patch("routes", "set_node_autodiscover_routes", return_value=[])
+        self._patch("routes", "delete_node_autodiscover_routes", return_value=None)
         self._patch("routes", "set_domain_routes", return_value=[])
         self._patch_env = mock.patch.dict(
             os.environ, {"MODULE_ID": "automx1", "AGENT_INSTALL_DIR": "/nonexistent"}

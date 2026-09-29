@@ -10,15 +10,15 @@
 # build-images.sh as a second image alongside the module's own agent image,
 # and is what imageroot/systemd/user/automx-app.service actually runs.
 #
-# Pinned to the v3.0.0-beta.3 tag (commit 627e7a655e0a...), the latest
-# automx 3.x pre-release at the time this was written. Bump AUTOMX_REF when
-# upstream cuts a new release; Renovate does not track this automatically
+# Pinned to the v3.0.0-beta.4 tag (commit 1a615c7c1167...), the first
+# release with CalDAV/CardDAV accounts in Mobileconfig profiles. Bump
+# AUTOMX_REF when upstream cuts a new release; Renovate does not track this automatically
 # (it has no upstream image tag to follow here), so this needs a manual bump
 # tracked the same way as any other pinned source dependency.
 
 FROM python:3.14.7-slim-trixie AS builder
 
-ARG AUTOMX_REF=v3.0.0-beta.3
+ARG AUTOMX_REF=v3.0.0-beta.4
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git \
@@ -30,6 +30,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /src
 RUN git clone --depth=1 --branch="${AUTOMX_REF}" \
         https://github.com/croessner/automx.git .
+
+# Patches not yet in an upstream release, applied in name order. The build
+# fails if one no longer applies, which is the cue to drop it after a bump.
+#  - 0001: serve POST /Autodiscover/Autodiscover.xml as well as the
+#    lowercase path (DESIGN.md 3.4). Submitted upstream; remove once
+#    AUTOMX_REF includes it.
+COPY patches/automx/ /tmp/patches/
+RUN for patch in /tmp/patches/*.patch; do git apply --verbose "${patch}" || exit 1; done
 
 RUN python -m venv /opt/automx \
     && /opt/automx/bin/pip install --no-cache-dir --upgrade pip \

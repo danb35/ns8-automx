@@ -141,11 +141,11 @@ def reconcile_locked(rdb):
 
     node_route_failure = None
     if enabled_domains:
-        response = routes.set_node_autodiscover_route(module_id, target_fqdn, settings["http2https"])
-        if response["exit_code"] != 0:
-            node_route_failure = (routes.node_autodiscover_instance(module_id), response)
+        node_failures = routes.set_node_autodiscover_routes(module_id, target_fqdn, settings["http2https"])
+        if node_failures:
+            node_route_failure = node_failures[0]
     else:
-        routes.delete_node_autodiscover_route(module_id)
+        routes.delete_node_autodiscover_routes(module_id)
 
     reload_result = subprocess.run(
         [os.path.join(os.environ["AGENT_INSTALL_DIR"], "bin", "reload-automx")],
