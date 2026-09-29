@@ -2,10 +2,13 @@
 
 Email client autoconfiguration for [NethServer 8](https://github.com/NethServer/ns8-core)
 mail domains, built on [croessner/automx](https://github.com/croessner/automx). Clients
-that are given only an email address (Thunderbird via Mail Autoconfig, Outlook via
-Microsoft Autodiscover, Apple Mail via an unsigned `.mobileconfig` profile) discover the
-IMAP and SMTP settings of the NS8 mail server on their own, with the correct login name
-and display name looked up from the domain's accounts provider (OpenLDAP or Samba AD).
+that are given only an email address (Thunderbird via Mail Autoconfig, Outlook and phones'
+Exchange setup via Microsoft Autodiscover, Apple devices via a `.mobileconfig` profile,
+optionally signed with the server's own certificate) discover the IMAP and SMTP settings of
+the NS8 mail server on their own, with the correct login name and display name looked up
+from the domain's accounts provider (OpenLDAP or Samba AD), also for a mail alias. The
+calendars and contacts (CalDAV/CardDAV) or ActiveSync server of an installed Nextcloud,
+SOGo or WebTop can be published along with mail.
 
 **Administering it?** The [user guide](docs/USER-GUIDE.md) explains enabling domains,
 publishing their DNS records (with or without dnshelper), settings, and sharing a
@@ -23,7 +26,8 @@ real NS8 nodes, across six separate real-node passes: the core autoconfig/Autodi
 mobileconfig path against both OpenLDAP (`rfc2307`) and Samba AD (`ad`) accounts
 providers; the manual (resolver-based) and dnshelper-backed DNS flows, including
 `not_permitted`, `conflict`, `unmanaged`, create, overwrite and the dnshelper-coverage-
-added-later ordering case; alias-address fallback; the LDAP-unreachable fallback; Traefik
+added-later ordering case; the alias-address fallback (aliases resolve to their owner's
+login since 0.2.0); the LDAP-unreachable fallback; Traefik
 route and certificate creation; disabling a domain; backup and restore into a new
 instance; and module removal. A final pass reran the whole stack (accounts provider,
 mail, automx, dnshelper) from scratch on a freshly reverted node with no new findings.
@@ -48,12 +52,23 @@ readiness gap and a redundant restart after first enabling a domain). It does no
 and certificate creation, dnshelper, or Samba AD, which need a node with those set up and inbound
 internet access; those were exercised manually in the earlier passes.
 
-v2 (in progress, see DESIGN.md section 2): the capitalized `/Autodiscover/Autodiscover.xml`
-path is routed (automx is patched to serve it until upstream releases the change), and
-the CalDAV/CardDAV and ActiveSync endpoints of an installed Nextcloud, SOGo or WebTop can
-be published along with mail, a mail alias that delivers to one user resolves to that
-user's login, and Apple profiles can be signed with the service host's certificate. Not
-yet real-node tested.
+v2 (0.2.0, see DESIGN.md section 2) adds CalDAV/CardDAV and ActiveSync from Nextcloud,
+SOGo or WebTop, alias resolution, signed Apple profiles, and the capitalized
+`/Autodiscover/Autodiscover.xml` path (automx is patched to serve it until upstream releases
+the change). It was tested on Rocky 9 and Debian 13 nodes, a public node with real Let's
+Encrypt certificates, an iPhone (iOS 26.7) and a Mac (macOS 15.8):
+
+- The signed profile shows as signed on iOS and without the "Unverified" warning on macOS,
+  and its Nextcloud calendars and contacts work.
+- An iPhone's own Exchange account setup found SOGo's ActiveSync server through automx and
+  synced a calendar event, asking for the password once (a profile asks once per account).
+  It first tried Autodiscover v2, which automx does not serve, then used the capitalized
+  Autodiscover path: the first real client seen on it.
+- Nextcloud is offered only when it runs on the same node as automx.
+
+Still unconfirmed with real clients: SOGo and WebTop calendars and contacts through the
+profile's CalDAV/CardDAV accounts, Thunderbird with an ActiveSync entry in Autoconfig, and
+Outlook with ActiveSync. See DESIGN.md section 2 for the details.
 
 Not in scope: PACC, Autodiscover v2, several mail instances at once. See DESIGN.md
 section 2 and 12.
@@ -126,7 +141,9 @@ argument-less ones, since the admin UI sends no payload.
   the full address" in a single filter, and it hard-fails instead of falling back on a
   miss. `imageroot/bin/automx-ldap-lookup`, invoked through automx's `script` backend,
   does the two-step lookup itself and always exits 0 with a fallback (the bare address,
-  no display name) on a miss or an unreachable directory. See DESIGN.md 3.3.
+  no display name) on a miss or an unreachable directory. A mail alias that delivers to one
+  user is looked up as that user, from a map `imageroot/bin/refresh-aliases` builds from the
+  mail module's addresses every 15 minutes. See DESIGN.md 3.3 and 2.
 - **Traefik routes** (`traefik@node:routeadm`) publish `autoconfig.<domain>` and
   `autodiscover.<domain>` for each enabled domain, plus routes on the node's own FQDN
   restricted to the Autodiscover path in both spellings (SRV records point there). See
@@ -221,9 +238,10 @@ what was confirmed by actually building and running the resulting image locally.
 re-runnable script against a real node. Unlike dnshelper's version, it does not set up
 the mail domain or accounts provider itself — see `tests/integration/README.md` for what
 the node must already have. It installs the published image and covers install,
-domains, the LDAP lookup and alias fallback, DNS status, backup/restore and removal; the
-route/certificate, dnshelper and Samba AD scenarios were exercised manually across the
-real-node passes recorded in DESIGN.md section 9.
+domains, the LDAP lookup, the capitalized Autodiscover path, alias resolution, DNS status,
+backup/restore and removal, and passes on Rocky 9 and Debian 13. The route/certificate,
+dnshelper, Samba AD, groupware and signing scenarios were exercised manually, as recorded in
+DESIGN.md sections 2 and 9.
 
 The Robot suite in `tests/` is the smoke test CI runs (`test-module.sh`):
 

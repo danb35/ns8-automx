@@ -30,10 +30,10 @@ told a server name, a port number or an encryption setting by hand.
 It also looks up the address in your accounts directory (OpenLDAP or Samba AD, whichever
 your mail domain's user domain uses) so the client is told the person's real login name
 and display name, not just the address they typed. A user's own address
-(`dan@example.com`) works for this out of the box. An address that is only a mail
-*alias* is not resolved to a login in this version: a client asking about an alias gets a
-generic answer and the person may need to enter their username by hand. See
-[When something goes wrong](#when-something-goes-wrong).
+(`dan@example.com`) works for this out of the box, and so does a mail alias that delivers
+to one person (see **Resolve mail aliases** under [Settings](#settings)). An alias shared by
+several people has no single login, so a client asking about it gets a generic answer and
+the person enters their own username.
 
 The pages of the application, in the side menu:
 
@@ -41,7 +41,7 @@ The pages of the application, in the side menu:
 |---|---|
 | **Status** | How many domains are enabled, which mail server and user domain are in use, whether dnshelper is present, service health, backup status and a shortcut to the logs |
 | **Domains** | Turn autoconfiguration on or off per mail domain, see its DNS and route status, publish DNS records, get a profile download link |
-| **Settings** | The service host name, whether HTTP redirects to HTTPS, and whether display names are included in responses |
+| **Settings** | The service host name, whether HTTP redirects to HTTPS, display names, alias resolution, profile signing, and the calendar, contacts and ActiveSync providers |
 | **About** | Version and links |
 
 Nothing here requires you to touch DNS or the mail server directly: automx reads your
@@ -227,7 +227,10 @@ mail. Pick the app under **CalDAV/CardDAV provider** or **ActiveSync provider** 
 - Apple devices get calendar and contacts accounts in the downloaded profile. Each
   account asks for the password once, because the profile contains no passwords.
 - Thunderbird is told about the calendar and address book; Outlook and phones that use
-  ActiveSync are pointed at the ActiveSync server.
+  ActiveSync are pointed at the ActiveSync server. On an iPhone, adding the address as a
+  **Microsoft Exchange** account (on iOS 26, **Settings → Apps → Mail → Mail Accounts**)
+  finds the ActiveSync server by itself and asks for the password once; the downloaded
+  profile, which has no ActiveSync account, asks once per account instead.
 - Users log in with the same user name as for mail.
 
 An app is only offered when it is set up with a host name and uses the same user domain
@@ -290,7 +293,7 @@ missing, the same as it would for a domain enabled for the first time.
 | **DNS is not managed by dnshelper for this domain** | Either dnshelper isn't installed, or it's installed but the zone covering this domain isn't one of its zones. Follow the copyable instructions shown, or add the zone on dnshelper's own Zones page |
 | **dnshelper has no access rule for this zone** | dnshelper knows the zone, but this automx instance hasn't been given a rule for it yet. Add the rule shown in the dialog — see [Optional: managing DNS through dnshelper](#optional-managing-dns-through-dnshelper) |
 | A DNS record shows **Conflict** | Something else already exists at that name with a different value (or a different record type). Use **Overwrite conflicting records** if dnshelper manages the zone, after reviewing the preview, or fix it at your DNS provider directly otherwise |
-| A client shows the person's raw email address instead of their name | Either **Include display names** is off in Settings, or the address the client asked about is a mail *alias* rather than the person's actual login — aliases are not resolved to a directory entry in this version, so the client falls back to a generic answer and may need the real login entered by hand |
+| A client shows the person's raw email address instead of their name | Either **Include display names** is off in Settings, or the address the client asked about is a mail *alias* that automx can't resolve: one shared by several people, one added in the last 15 minutes, or any alias while **Resolve mail aliases** is off. The client then falls back to a generic answer and the person enters their own username |
 | A domain is greyed out and marked **Orphaned** | The mail domain it was for no longer exists on the mail module. Nothing is being served for it; remove it from the mail module for good if it's not coming back |
 | The service on the Status page shows as not running | Check the service logs from the Status page's Logs card. A validation failure in the rendered configuration (for example, the accounts provider being briefly unreachable) leaves the *previous* working configuration in place rather than taking the service down, so this usually means something more fundamental — the mail module or the accounts provider being absent entirely |
 
