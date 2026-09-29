@@ -19,6 +19,7 @@ MAIL_DOMAIN = os.environ.get('MAIL_DOMAIN')
 TEST_USER_LOGIN = os.environ.get('TEST_USER_LOGIN')
 TEST_USER_MAIL = os.environ.get('TEST_USER_MAIL')
 TEST_ALIAS_MAIL = os.environ.get('TEST_ALIAS_MAIL')
+TEST_ALIAS_LOGIN = os.environ.get('TEST_ALIAS_LOGIN')
 DNSHELPER_MODULE_ID = os.environ.get('DNSHELPER_MODULE_ID')
 # A fresh install must come from a registry: the module's rootless podman storage is separate
 # from root's, so add-module cannot pull a localhost/ image built on the node (see
@@ -116,6 +117,21 @@ def curl_automx(module_id, path, method='GET', data=None):
     return ssh('curl ' + ' '.join(args)).stdout
 
 
+def post_autodiscover(module_id, path, email):
+    """POST an Outlook Autodiscover request to the container's published
+    port; returns the response body."""
+    body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006">'
+        '<Request><EMailAddress>%s</EMailAddress>'
+        '<AcceptableResponseSchema>http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a'
+        '</AcceptableResponseSchema></Request></Autodiscover>' % email
+    )
+    port = redis('HGET', 'module/%s/environment' % module_id, 'TCP_PORT')
+    return ssh("curl -s -H 'content-type: text/xml' --data-binary @- 'http://127.0.0.1:%s%s'" % (port, path),
+               stdin=body).stdout
+
+
 @unittest.skipUnless(NODE and MAIL_MODULE_ID and MAIL_DOMAIN, 'set NS8_NODE, MAIL_MODULE_ID and MAIL_DOMAIN')
 class NodeIntegration(unittest.TestCase):
     automx = None
@@ -176,7 +192,9 @@ class NodeIntegration(unittest.TestCase):
 
         rc, status = api(cls.automx, 'get-status', None)
         self.assertEqual(rc, 0)
-        service = next(s for s in status['services'] if s['name'].startswith('automx'))
+        # By exact name: get-status lists every unit file, including the
+        # automx-aliases oneshot, which is inactive between timer runs.
+        service = next(s for s in status['services'] if s['name'] == 'automx')
         self.assertTrue(service['active'] and not service['failed'], service)
 
         route = '%s-autoconfig-%s-0' % (cls.automx, MAIL_DOMAIN)
@@ -218,14 +236,50 @@ class NodeIntegration(unittest.TestCase):
         self.assertIn('<username>%s</username>' % TEST_USER_LOGIN, body,
                        "automx-ldap-lookup should have resolved the primary address's own login")
 
-    def test_05_alias_falls_back_to_the_bare_address(self):
-        # DESIGN.md 3.3: an alias is not a valid login; the static fallback
-        # applies rather than a wrong login being offered.
-        if not TEST_ALIAS_MAIL:
-            self.skipTest('set TEST_ALIAS_MAIL to test the alias fallback path')
+    def test_04b_capitalized_autodiscover_path_is_served_and_routed(self):
+        # DESIGN.md 3.4: Outlook/MobileSync also use /Autodiscover/Autodiscover.xml.
+        # automx serves it (patches/automx), and the node FQDN gets a route for
+        # it; the node routes don't wait for DNS, so they exist on any node.
         cls = type(self)
-        body = curl_automx(cls.automx, '/mail/config-v1.1.xml?emailaddress=%s' % TEST_ALIAS_MAIL)
-        self.assertIn('<username>%s</username>' % TEST_ALIAS_MAIL, body)
+        address = TEST_USER_MAIL or 'nobody@%s' % MAIL_DOMAIN
+        lower = post_autodiscover(cls.automx, '/autodiscover/autodiscover.xml', address)
+        upper = post_autodiscover(cls.automx, '/Autodiscover/Autodiscover.xml', address)
+        self.assertIn('<Protocol>', lower.replace('ns0:', ''))
+        self.assertEqual(upper, lower)
+        rc, out = api(traefik_module_id(), 'get-route', {'instance': '%s-node-autodiscover-1' % cls.automx})
+        self.assertEqual(out.get('path'), '/Autodiscover/Autodiscover.xml')
+        self.assertTrue(route_exists('%s-node-autodiscover' % cls.automx))
+
+    def test_05_alias_resolves_to_its_owner(self):
+        # DESIGN.md 2 (v2): an alias delivering to one user resolves to that
+        # user's login, from the map refresh-aliases writes. The refresh runs
+        # a few seconds after automx starts, so allow it a moment.
+        if not (TEST_ALIAS_MAIL and TEST_ALIAS_LOGIN):
+            self.skipTest('set TEST_ALIAS_MAIL and TEST_ALIAS_LOGIN to test alias resolution')
+        cls = type(self)
+        expected = '<username>%s</username>' % TEST_ALIAS_LOGIN
+        for _ in range(12):
+            body = curl_automx(cls.automx, '/mail/config-v1.1.xml?emailaddress=%s' % TEST_ALIAS_MAIL)
+            if expected in body:
+                break
+            time.sleep(5)
+        self.assertIn(expected, body)
+        self.assertIn('automx-aliases.timer', ssh(
+            'runagent -m %s systemctl --user list-timers --all' % cls.automx).stdout)
+
+    def test_05b_alias_resolution_can_be_turned_off(self):
+        if not (TEST_ALIAS_MAIL and TEST_ALIAS_LOGIN):
+            self.skipTest('set TEST_ALIAS_MAIL and TEST_ALIAS_LOGIN to test alias resolution')
+        cls = type(self)
+        api(cls.automx, 'configure-module', {'resolve_aliases': False})
+        expected = '<username>%s</username>' % TEST_ALIAS_MAIL
+        for _ in range(12):
+            body = curl_automx(cls.automx, '/mail/config-v1.1.xml?emailaddress=%s' % TEST_ALIAS_MAIL)
+            if expected in body:
+                break
+            time.sleep(5)
+        api(cls.automx, 'configure-module', {'resolve_aliases': True})
+        self.assertIn(expected, body)
 
     def test_06_dns_status_reflects_dnshelper_presence(self):
         cls = type(self)

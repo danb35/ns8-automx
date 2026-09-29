@@ -47,15 +47,16 @@ certificate creation itself is only exercised on a node that can satisfy both.
 NS8_NODE=192.168.1.20 NS8_SSH_KEY=~/.ssh/id_ed25519 \
 MAIL_MODULE_ID=mail1 MAIL_DOMAIN=example.test \
 TEST_USER_LOGIN=dan TEST_USER_MAIL=dan@example.test \
-TEST_ALIAS_MAIL=dan.brown@example.test \
+TEST_ALIAS_MAIL=dan.brown@example.test TEST_ALIAS_LOGIN=dan \
     python3 -m unittest tests/integration/test_node.py -v
 ```
 
 `NS8_NODE`, `MAIL_MODULE_ID` and `MAIL_DOMAIN` are required (the test is skipped without them).
 `TEST_USER_LOGIN`/`TEST_USER_MAIL` (a real user's login and primary address in the mail domain's
 user domain) are required to test the LDAP lookup path meaningfully; without them that part is
-skipped and only the static/fallback behavior is checked. `TEST_ALIAS_MAIL` is optional and covers
-DESIGN.md 3.3's "an alias is not a valid login, falls back" case. `DNSHELPER_MODULE_ID` (optional)
+skipped and only the static/fallback behavior is checked. `TEST_ALIAS_MAIL` and `TEST_ALIAS_LOGIN` (an alias
+that delivers to exactly one user, and that user's login) are optional and cover alias resolution
+(DESIGN.md 2, v2). `DNSHELPER_MODULE_ID` (optional)
 points at an already-installed dnshelper instance covering `MAIL_DOMAIN`'s zone, to exercise the
 dnshelper-present DNS paths; without it, only the manual/resolver path (5.4) is checked.
 
