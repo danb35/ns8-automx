@@ -116,6 +116,21 @@ def curl_automx(module_id, path, method='GET', data=None):
     return ssh('curl ' + ' '.join(args)).stdout
 
 
+def post_autodiscover(module_id, path, email):
+    """POST an Outlook Autodiscover request to the container's published
+    port; returns the response body."""
+    body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006">'
+        '<Request><EMailAddress>%s</EMailAddress>'
+        '<AcceptableResponseSchema>http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a'
+        '</AcceptableResponseSchema></Request></Autodiscover>' % email
+    )
+    port = redis('HGET', 'module/%s/environment' % module_id, 'TCP_PORT')
+    return ssh("curl -s -H 'content-type: text/xml' --data-binary @- 'http://127.0.0.1:%s%s'" % (port, path),
+               stdin=body).stdout
+
+
 @unittest.skipUnless(NODE and MAIL_MODULE_ID and MAIL_DOMAIN, 'set NS8_NODE, MAIL_MODULE_ID and MAIL_DOMAIN')
 class NodeIntegration(unittest.TestCase):
     automx = None
@@ -217,6 +232,20 @@ class NodeIntegration(unittest.TestCase):
         # Only the fallback path (test_05) renders the full address back.
         self.assertIn('<username>%s</username>' % TEST_USER_LOGIN, body,
                        "automx-ldap-lookup should have resolved the primary address's own login")
+
+    def test_04b_capitalized_autodiscover_path_is_served_and_routed(self):
+        # DESIGN.md 3.4: Outlook/MobileSync also use /Autodiscover/Autodiscover.xml.
+        # automx serves it (patches/automx), and the node FQDN gets a route for
+        # it; the node routes don't wait for DNS, so they exist on any node.
+        cls = type(self)
+        address = TEST_USER_MAIL or 'nobody@%s' % MAIL_DOMAIN
+        lower = post_autodiscover(cls.automx, '/autodiscover/autodiscover.xml', address)
+        upper = post_autodiscover(cls.automx, '/Autodiscover/Autodiscover.xml', address)
+        self.assertIn('<Protocol>', lower.replace('ns0:', ''))
+        self.assertEqual(upper, lower)
+        rc, out = api(traefik_module_id(), 'get-route', {'instance': '%s-node-autodiscover-1' % cls.automx})
+        self.assertEqual(out.get('path'), '/Autodiscover/Autodiscover.xml')
+        self.assertTrue(route_exists('%s-node-autodiscover' % cls.automx))
 
     def test_05_alias_falls_back_to_the_bare_address(self):
         # DESIGN.md 3.3: an alias is not a valid login; the static fallback
