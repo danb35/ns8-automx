@@ -21,9 +21,7 @@ import agent
 
 # automx's actual served paths (DESIGN.md 3.4, confirmed against
 # src/automx/app.py): each needs its own route since `path` is a single
-# prefix, not a list. The capitalized Autodiscover variant Outlook
-# sometimes uses is a known v1 gap (3.4) -- not routed, no rewrite
-# capability was confirmed for it.
+# prefix, not a list.
 AUTOCONFIG_PATHS = (
     "/mail/config-v1.1.xml",
     "/.well-known/autoconfig/mail/config-v1.1.xml",
@@ -31,7 +29,14 @@ AUTOCONFIG_PATHS = (
     "/mobileconfig.css",
     "/mobileconfig.js",
 )
-AUTODISCOVER_PATH = "/autodiscover/autodiscover.xml"
+# Traefik path matching is case-sensitive and set-route has no rewrite
+# option (DESIGN.md 3.4), so the capitalized spelling Outlook and
+# MobileSync clients also use gets its own route. automx serves it only
+# with the alias patch the Containerfile applies (patches/).
+AUTODISCOVER_PATHS = (
+    "/autodiscover/autodiscover.xml",
+    "/Autodiscover/Autodiscover.xml",
+)
 
 
 def instance_name(module_id, kind, domain, index):
@@ -96,10 +101,11 @@ def set_domain_routes(module_id, domain, http2https):
         if response["exit_code"] != 0:
             failures.append((instance, response))
 
-    instance = instance_name(module_id, "autodiscover", domain, 0)
-    response = _set(instance, f"autodiscover.{domain}", AUTODISCOVER_PATH, http2https)
-    if response["exit_code"] != 0:
-        failures.append((instance, response))
+    for index, path in enumerate(AUTODISCOVER_PATHS):
+        instance = instance_name(module_id, "autodiscover", domain, index)
+        response = _set(instance, f"autodiscover.{domain}", path, http2https)
+        if response["exit_code"] != 0:
+            failures.append((instance, response))
 
     return failures
 
@@ -126,23 +132,33 @@ def delete_domain_routes(module_id, domain):
     Full-module removal doesn't need this: ns8-traefik's own module-removed
     handler cleans up every route whose instance name contains module_id."""
     instances = [instance_name(module_id, "autoconfig", domain, i) for i in range(len(AUTOCONFIG_PATHS))]
-    instances.append(instance_name(module_id, "autodiscover", domain, 0))
+    instances += [instance_name(module_id, "autodiscover", domain, i) for i in range(len(AUTODISCOVER_PATHS))]
     for instance in instances:
         _delete(instance)
 
 
-def node_autodiscover_instance(module_id):
-    return f"{module_id}-node-autodiscover"
+def node_autodiscover_instance(module_id, index=0):
+    # Index 0 keeps the unsuffixed name the lowercase route has always had,
+    # so existing installs update that route in place.
+    suffix = f"-{index}" if index else ""
+    return f"{module_id}-node-autodiscover{suffix}"
 
 
-def set_node_autodiscover_route(module_id, node_fqdn, http2https):
-    """The single route on the node's own FQDN, restricted to the
-    Autodiscover path (DESIGN.md 4.4) -- SRV records point Outlook here.
-    NS8 core sets up no host-based catch-all for the bare node FQDN (3.4),
-    so this doesn't collide with anything core manages."""
-    instance = node_autodiscover_instance(module_id)
-    return _set(instance, node_fqdn, AUTODISCOVER_PATH, http2https)
+def set_node_autodiscover_routes(module_id, node_fqdn, http2https):
+    """The routes on the node's own FQDN, restricted to the Autodiscover
+    paths (DESIGN.md 4.4) -- SRV records point Outlook here. NS8 core sets
+    up no host-based catch-all for the bare node FQDN (3.4), so these don't
+    collide with anything core manages. Returns (instance, response) for
+    each failed call, like set_domain_routes."""
+    failures = []
+    for index, path in enumerate(AUTODISCOVER_PATHS):
+        instance = node_autodiscover_instance(module_id, index)
+        response = _set(instance, node_fqdn, path, http2https)
+        if response["exit_code"] != 0:
+            failures.append((instance, response))
+    return failures
 
 
-def delete_node_autodiscover_route(module_id):
-    _delete(node_autodiscover_instance(module_id))
+def delete_node_autodiscover_routes(module_id):
+    for index in range(len(AUTODISCOVER_PATHS)):
+        _delete(node_autodiscover_instance(module_id, index))

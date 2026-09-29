@@ -1,0 +1,83 @@
+From 13e17019cc749e3d894bc2ee64d7bc5d689ccfe6 Mon Sep 17 00:00:00 2001
+From: Dan <danb35@gmail.com>
+Date: Tue, 29 Sep 2026 09:29:45 -0400
+Subject: [PATCH] Add: Accept the capitalized Autodiscover XML path
+
+- Register /Autodiscover/Autodiscover.xml as an alias of the existing
+  POST /autodiscover/autodiscover.xml handler. Exchange matches this path
+  case-insensitively, and Outlook and MobileSync clients in the field
+  request the capitalized spelling, which currently gets a 404.
+- The alias is excluded from the OpenAPI schema, so the published contract
+  keeps one operation.
+- A reverse proxy can now forward both spellings unchanged; path matching
+  in proxies such as Traefik is case-sensitive, and some deployments have
+  no path-rewrite option.
+- Tests: identical response on both paths, GET still 405, no second
+  OpenAPI operation.
+---
+ src/automx/app.py      |  9 +++++++++
+ tests/test_http_app.py | 31 +++++++++++++++++++++++++++++++
+ 2 files changed, 40 insertions(+)
+
+diff --git a/src/automx/app.py b/src/automx/app.py
+index dc3c549..47519bd 100644
+--- a/src/automx/app.py
++++ b/src/automx/app.py
+@@ -369,6 +369,15 @@ def create_app(
+         operation_id="post_autodiscover_xml",
+         response_class=XMLResponse,
+     )
++    # Exchange serves this path case-insensitively, so Outlook and MobileSync
++    # clients in the field also request the capitalized spelling. Alias it
++    # to the same handler; it is left out of the schema to keep one
++    # operation per contract.
++    @app.post(
++        "/Autodiscover/Autodiscover.xml",
++        include_in_schema=False,
++        response_class=XMLResponse,
++    )
+     async def autodiscover(request: Request) -> Response:
+         try:
+             root: etree._Element = await parse_xml_request(
+diff --git a/tests/test_http_app.py b/tests/test_http_app.py
+index 86eb11e..e71d11c 100644
+--- a/tests/test_http_app.py
++++ b/tests/test_http_app.py
+@@ -164,3 +164,34 @@ ews_url = https://mail.example.test/EWS/Exchange.asmx
+     )
+     assert redirect.status_code == 307
+     assert "private@example.test" not in caplog.text
++
++
++def test_autodiscover_accepts_the_capitalized_exchange_path(config_path: Path) -> None:
++    client = TestClient(create_app(config_path=config_path))
++    body = (
++        b'<?xml version="1.0" encoding="utf-8"?>'
++        b'<Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/'
++        b'outlook/requestschema/2006"><Request>'
++        b"<EMailAddress>user@example.test</EMailAddress>"
++        b"<AcceptableResponseSchema>http://schemas.microsoft.com/exchange/autodiscover/"
++        b"outlook/responseschema/2006a</AcceptableResponseSchema>"
++        b"</Request></Autodiscover>"
++    )
++    headers = {"content-type": "text/xml"}
++
++    lowercase = client.post("/autodiscover/autodiscover.xml", content=body, headers=headers)
++    capitalized = client.post("/Autodiscover/Autodiscover.xml", content=body, headers=headers)
++
++    assert capitalized.status_code == 200
++    assert capitalized.content == lowercase.content
++    assert b"imap.example.test" in capitalized.content
++    assert client.get("/Autodiscover/Autodiscover.xml").status_code == 405
++
++
++def test_capitalized_autodiscover_path_is_not_a_second_openapi_operation(
++    config_path: Path,
++) -> None:
++    paths = create_app(config_path=config_path).openapi()["paths"]
++
++    assert "/autodiscover/autodiscover.xml" in paths
++    assert "/Autodiscover/Autodiscover.xml" not in paths
+-- 
+2.55.0
+
