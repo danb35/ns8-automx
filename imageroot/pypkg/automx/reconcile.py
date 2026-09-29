@@ -69,6 +69,8 @@ import subprocess
 import sys
 from contextlib import contextmanager
 
+import agent
+
 from automx import dns, dnshelperclient, dnsstatus, domains, mail, node, routes, state
 
 
@@ -154,6 +156,13 @@ def reconcile_locked(rdb):
     )
     if reload_result.returncode != 0:
         print(reload_result.stderr, file=sys.stderr, end="")
+
+    # Pick up a changed alias setting or domain list without waiting for
+    # the timer (imageroot/bin/refresh-aliases). --no-block: it calls the
+    # mail module and must not hold the reconcile lock. Harmless when
+    # automx isn't running: the map is only read by the running container.
+    if enabled_domains:
+        agent.run_helper("systemctl", "--user", "start", "--no-block", "automx-aliases.service")
 
     return {
         "route_failures": route_failures,

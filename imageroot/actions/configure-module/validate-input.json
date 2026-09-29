@@ -9,7 +9,8 @@
             "http2https": true,
             "display_names": true,
             "dav_module": "sogo1",
-            "activesync_module": null
+            "activesync_module": null,
+            "resolve_aliases": true
         }
     ],
     "type": [
@@ -53,6 +54,11 @@
             "title": "ActiveSync provider",
             "description": "Module id (from get-configuration's groupware list) whose ActiveSync endpoint is published, or null for none.",
             "pattern": "^[a-z][a-z0-9-]*[0-9]+$"
+        },
+        "resolve_aliases": {
+            "type": "boolean",
+            "title": "Resolve mail aliases",
+            "description": "For a mail alias that delivers to exactly one user, hand out that user's login instead of the typed address. Like display names, this tells an anonymous requester which login is behind an alias (DESIGN.md 8); on by default."
         }
     }
 }

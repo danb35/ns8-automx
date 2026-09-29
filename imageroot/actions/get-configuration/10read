@@ -30,6 +30,7 @@ json.dump(
         "service_host": settings["service_host"],
         "http2https": settings["http2https"],
         "display_names": settings["display_names"],
+        "resolve_aliases": settings["resolve_aliases"],
         "dav_module": settings["dav_module"],
         "activesync_module": settings["activesync_module"],
         "groupware": candidates,

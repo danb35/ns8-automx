@@ -94,9 +94,18 @@ class LookupTests(unittest.TestCase):
         self.config_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
         self.config_file.close()
         self.addCleanup(_remove_if_present, self.config_file.name)
-        self.env_patch = mock.patch.dict(os.environ, {"AUTOMX_LDAP_LOOKUP_CONFIG": self.config_file.name})
+        self.aliases_path = self.config_file.name + ".aliases"
+        self.addCleanup(_remove_if_present, self.aliases_path)
+        self.env_patch = mock.patch.dict(
+            os.environ,
+            {"AUTOMX_LDAP_LOOKUP_CONFIG": self.config_file.name, "AUTOMX_ALIASES": self.aliases_path},
+        )
         self.env_patch.start()
         self.addCleanup(self.env_patch.stop)
+
+    def write_aliases(self, alias_map):
+        with open(self.aliases_path, "w") as f:
+            json.dump(alias_map, f)
 
     def write_config(self, **overrides):
         config = {
@@ -170,6 +179,46 @@ class LookupTests(unittest.TestCase):
         )
 
     # -- fallback contract (DESIGN.md 3.3): always exit 0, always one line --
+
+    # -- mail aliases (DESIGN.md 3.3, v2) --
+
+    def test_alias_resolves_to_owner_login_and_name(self):
+        self.write_config(schema="rfc2307")
+        self.write_aliases({"dan.brown@example.com": "dan"})
+        conn = FakeConnection(search_results=[("uid=dan,dc=example,dc=com", {"uid": [b"dan"], "cn": [b"Dan Brown"]})])
+        out, _ = self.run_lookup(conn, ["Dan.Brown", "example.com", "Dan.Brown@example.com"])
+        self.assertEqual(out, "dan|Dan Brown\n")
+        # The alias address is not in LDAP: match the owner's login only.
+        self.assertEqual(conn.search_calls[0]["filter"], "(&(uid=dan))")
+
+    def test_alias_keeps_owner_login_when_ldap_fails(self):
+        self.write_config(schema="rfc2307")
+        self.write_aliases({"sales@example.com": "dan"})
+        conn = FakeConnection(bind_error=RuntimeError("unreachable"))
+        out, _ = self.run_lookup(conn, ["sales", "example.com", "sales@example.com"])
+        self.assertEqual(out, "dan|\n")
+
+    def test_alias_hidden_from_ldap_still_gets_owner_login(self):
+        self.write_config(schema="rfc2307")
+        self.write_aliases({"sales@example.com": "dan"})
+        out, _ = self.run_lookup(FakeConnection(search_results=[]), ["sales", "example.com", "sales@example.com"])
+        self.assertEqual(out, "dan|\n")
+
+    def test_address_not_in_alias_map_uses_the_normal_rule(self):
+        self.write_config(schema="rfc2307")
+        self.write_aliases({"sales@example.com": "dan"})
+        conn = FakeConnection(search_results=[("uid=eve,dc=example,dc=com", {"uid": [b"eve"], "cn": [b"Eve"]})])
+        out, _ = self.run_lookup(conn, ["eve", "example.com", "eve@example.com"])
+        self.assertEqual(out, "eve|Eve\n")
+        self.assertEqual(conn.search_calls[0]["filter"], "(&(|(uid=eve)(mail=eve@example.com)))")
+
+    def test_malformed_alias_map_is_ignored(self):
+        self.write_config(schema="rfc2307")
+        with open(self.aliases_path, "w") as f:
+            f.write("not json")
+        conn = FakeConnection(search_results=[])
+        out, _ = self.run_lookup(conn, ["sales", "example.com", "sales@example.com"])
+        self.assertEqual(out, "sales@example.com|\n")
 
     def test_no_match_falls_back_to_bare_address(self):
         self.write_config()

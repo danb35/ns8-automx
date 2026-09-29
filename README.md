@@ -51,7 +51,8 @@ internet access; those were exercised manually in the earlier passes.
 v2 (in progress, see DESIGN.md section 2): the capitalized `/Autodiscover/Autodiscover.xml`
 path is routed (automx is patched to serve it until upstream releases the change), and
 the CalDAV/CardDAV and ActiveSync endpoints of an installed Nextcloud, SOGo or WebTop can
-be published along with mail. Not yet real-node tested.
+be published along with mail, and a mail alias that delivers to one user resolves to that
+user's login. Not yet real-node tested.
 
 Not in scope: PACC, Autodiscover v2, several mail instances at once. See DESIGN.md
 section 2 and 12.
