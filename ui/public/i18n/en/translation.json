@@ -101,7 +101,17 @@
     "display_names_notice_description": "Autoconfiguration endpoints answer any request, without a password. With this on, a display name is included for whichever address is asked about, along with the mail server names. Turn it off to reduce what an anonymous request reveals, at the cost of clients showing the raw address instead of a name.",
     "enabled": "Enabled",
     "disabled": "Disabled",
-    "configuring": "Configuring"
+    "configuring": "Configuring",
+    "groupware_title": "Calendars, contacts and ActiveSync",
+    "groupware_description": "Also publish the CalDAV/CardDAV or ActiveSync endpoint of a groupware app, so clients set those up along with mail. Users log in with the same user name as for mail.",
+    "dav_module": "CalDAV/CardDAV provider",
+    "activesync_module": "ActiveSync provider",
+    "groupware_none": "None",
+    "groupware_none_found_title": "No groupware app found",
+    "groupware_none_found_description": "Nextcloud, SOGo or WebTop can be offered here once installed, configured with a host name, and bound to the same user domain as the mail server. ActiveSync also requires SOGo or WebTop to use this mail server. Nextcloud must run on this node.",
+    "kind_nextcloud": "Nextcloud",
+    "kind_sogo": "SOGo",
+    "kind_webtop": "WebTop"
   },
   "about": {
     "title": "About"
@@ -152,6 +162,7 @@
     "auth_failed": "Authentication with the DNS provider failed",
     "unsupported": "Not supported by this DNS provider",
     "invalid_request": "Invalid request",
-    "unknown_provider": "Unknown DNS provider"
+    "unknown_provider": "Unknown DNS provider",
+    "groupware_not_available": "That app does not provide this service for the mail server."
   }
 }

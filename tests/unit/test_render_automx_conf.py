@@ -118,6 +118,63 @@ class WriteAutomxConfTests(unittest.TestCase):
         self.assertEqual(mode, 0o640)
 
 
+class GroupwareRenderTests(unittest.TestCase):
+    # DESIGN.md 2, v2 scope: CalDAV/CardDAV and ActiveSync from a chosen
+    # groupware module.
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.path = os.path.join(self.tmpdir.name, "automx.conf")
+
+    def test_no_groupware_by_default(self):
+        render.write_automx_conf(self.path, "node.example.net", ["example.com"], "mail.example.com", True)
+        section = read_ini(self.path)["global"]
+        for prefix in ("caldav", "carddav", "activesync"):
+            self.assertNotIn(prefix, section)
+
+    def test_dav_publishes_caldav_and_carddav_with_password_auth(self):
+        render.write_automx_conf(
+            self.path, "node.example.net", ["example.com"], "mail.example.com", True,
+            dav_url="https://sogo.example.com/SOGo/dav/",
+        )
+        section = read_ini(self.path)["global"]
+        for prefix in ("caldav", "carddav"):
+            self.assertEqual(section[prefix], "yes")
+            self.assertEqual(section[f"{prefix}_url"], "https://sogo.example.com/SOGo/dav/")
+            # Password-based auth is what keeps DAV in Apple profiles.
+            self.assertEqual(section[f"{prefix}_auth"], "http-basic")
+            self.assertEqual(section[f"{prefix}_auth_identity"], "${login}")
+        self.assertNotIn("activesync", section)
+
+    def test_activesync(self):
+        render.write_automx_conf(
+            self.path, "node.example.net", ["example.com"], "mail.example.com", True,
+            activesync_url="https://sogo.example.com/Microsoft-Server-ActiveSync",
+        )
+        section = read_ini(self.path)["global"]
+        self.assertEqual(section["activesync"], "yes")
+        self.assertEqual(section["activesync_url"], "https://sogo.example.com/Microsoft-Server-ActiveSync")
+        self.assertEqual(section["activesync_auth_identity"], "${login}")
+        self.assertNotIn("caldav", section)
+
+    def test_groupware_urls_skips_discovery_when_nothing_is_chosen(self):
+        with mock.patch.object(render.groupware, "list_candidates") as list_candidates:
+            urls = render.groupware_urls(mock.Mock(), {"dav_module": None, "activesync_module": None}, "mail1", "d")
+        self.assertEqual(urls, {"dav_url": None, "activesync_url": None})
+        list_candidates.assert_not_called()
+
+    def test_groupware_urls_drops_a_module_that_is_gone_with_a_warning(self):
+        candidates = [{"module_id": "sogo1", "dav_url": "https://s/SOGo/dav/", "activesync_url": None}]
+        with mock.patch.object(render.groupware, "list_candidates", return_value=candidates), \
+                mock.patch("sys.stderr") as stderr:
+            urls = render.groupware_urls(
+                mock.Mock(), {"dav_module": "sogo1", "activesync_module": "sogo1"}, "mail1", "d"
+            )
+        self.assertEqual(urls, {"dav_url": "https://s/SOGo/dav/", "activesync_url": None})
+        self.assertIn("activesync", "".join(str(c) for c in stderr.write.call_args_list))
+
+
 class WriteLdapLookupTests(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()

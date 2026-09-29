@@ -43,6 +43,29 @@ The module:
   - Assuming we can use the default system cert, determine whether that's a trusted cert, and warn the admin if it isn't.
   - Allow the admin to enable/disable.
 
+### v2 implementation notes
+
+**CalDAV/CardDAV and ActiveSync (implemented 2026-09-29, not yet real-node tested).** automx is pinned to `v3.0.0-beta.4`, the first release with DAV accounts in Mobileconfig (contributed upstream as croessner/automx#1). Where each module keeps what we need, read from its own repository:
+
+| Module | Host | CalDAV/CardDAV | ActiveSync | Mail module it uses |
+|---|---|---|---|---|
+| Nextcloud | its Traefik route (instance = module id); `config.json` only, not in its environment | `/remote.php/dav/` | none | n/a |
+| SOGo | `TRAEFIK_HOST` | `/SOGo/dav/`, when `DAV` is `True` | `/Microsoft-Server-ActiveSync`, when `ACTIVESYNC` is `True` (`templates/SOGo.conf`) | `MAIL_SERVER` (mail module UUID) |
+| WebTop | `WEBTOP_HOSTNAME` | `/webtop-dav/server.php` | `/Microsoft-Server-ActiveSync` (z-push) | `MAIL_MODULE_UUID` |
+
+- No new authorization: every module agent can read all `module/<id>/environment` hashes (the Redis ACL from ns8-core's `add-module`). Modules are enumerated from `cluster/module_node` and identified by the image name in `IMAGE_URL`.
+- A module is offered for DAV when it is on the mail instance's user domain (the DAV login is the directory login): bound to it (Nextcloud, SOGo), or using a mail module with that user domain. WebTop binds nothing itself (found on a real node: `cluster/module_domains` has no entry for it); it takes its mail module's user domain from that module's `srv/tcp/imap` key. ActiveSync also carries mail, so it additionally needs the same mail module. Nextcloud is offered only on this module's own node, since its host comes from a Traefik route and this module holds only `traefik@node:routeadm`.
+- Settings `dav_module` and `activesync_module` (module id or null) replace a separate enable toggle plus picker: null is off. `configure-module` rejects a module that does not provide the service (`groupware_not_available`). A chosen module that later disappears is dropped from the rendered config with a warning, and mail autoconfiguration keeps working.
+- Rendered as `caldav`/`carddav`/`activesync` with `_url`, `_auth = http-basic` (password auth is what keeps DAV in Apple profiles; automx leaves out DAV services whose auth is not password-based) and `_auth_identity = ${login}`, the same looked-up login as mail. Checked against the built beta.4 image: `config validate` passes; Mobileconfig contains `com.apple.caldav.account` and `com.apple.carddav.account` payloads; MobileSync Autodiscover returns the ActiveSync URL; Autoconfig adds `calendar`, `addressbook` and an `activeSync` `incomingServer` after the IMAP one.
+
+**Real node (2026-09-29, LAN test node with SOGo 2.2.8 and WebTop 1.5.10 on mail1 / OpenLDAP `2v6.in`):** both are offered with the URLs above; `configure-module` rejects an unavailable module (`groupware_not_available`); with SOGo for DAV and WebTop for ActiveSync, the live container serves an Apple profile with CalDAV/CardDAV accounts on `sogo.<host>` (username `fred`, also for the alias `fred.flintstone@`), Autoconfig with calendar, addressbook and an activeSync server after IMAP, and a MobileSync response with WebTop's URL. All four published URLs exist behind Traefik (unauthenticated PROPFIND/OPTIONS answer 401). Not tested: Nextcloud 1.7.5 would not start on that node (its own `setup-smtp` step fails with `KeyError: 'internal_smarthost'`), so it never bound its user domain and was correctly not offered. That failure is an ns8-nextcloud bug: its `setup-smtp` step reads `internal_smarthost` from the saved configuration, which `configure-module`'s schema does not list, so a call without it breaks the service (the admin UI always sends it). **Public node (ns8-test.2v6.in, Nextcloud 1.7.5 bound to the user domain):** Nextcloud is offered with its host (`cloud.2v6.in`) read from its Traefik route, and the public Autoconfig and Apple profile carry `https://cloud.2v6.in/remote.php/dav/` with the directory login. A real iPhone (iOS 26.7) installed the profile and mail, calendar and contacts all worked against this Nextcloud (2026-09-29). SOGo and WebTop installed on the same node were offered for both DAV and ActiveSync (WebTop installed through the UI there is bound to the user domain, unlike the LAN node's, so both discovery paths are exercised), and with each chosen in turn the public Autoconfig, Apple profile and MobileSync responses carry its URLs; `/SOGo/dav/`, `/webtop-dav/server.php` and both `/Microsoft-Server-ActiveSync` answer 401 over HTTPS, and WebTop's own `/.well-known/caldav` redirects to the same DAV path.
+
+**VERIFY on a real node / real clients:**
+1. iOS/macOS discover calendars and contacts from `https://<sogo>/SOGo/dav/` and `https://<webtop>/webtop-dav/server.php` given as the principal URL (Nextcloud's `/remote.php/dav/` is confirmed on real devices).
+2. The directory login (uid / sAMAccountName) is the login each app accepts for DAV and ActiveSync.
+3. Thunderbird still picks IMAP when Autoconfig also lists an `activeSync` incoming server.
+4. Outlook and phones configure ActiveSync from the MobileSync Autodiscover response.
+
 ### Out of scope for v2 (possible later)
 
 - PACC (`_ua-auto-config` TXT record and JSON). It is an Internet-Draft and its TXT digest is byte-sensitive to the served configuration.

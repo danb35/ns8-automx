@@ -105,6 +105,14 @@ def build(
 
     agent.set_env = mock.Mock()
 
+    def get_image_name_from_url(image_url):
+        # Same as the real helper in ns8-core's agent package.
+        _, image_nametag = image_url.rsplit("/", 1)
+        image_name, _ = image_nametag.replace("@", ":", 1).split(":", 1)
+        return image_name
+
+    agent.get_image_name_from_url = get_image_name_from_url
+
     def default_tasks_run(agent_id=None, action=None, data=None, **kwargs):
         raise AssertionError(f"unexpected agent.tasks.run({agent_id!r}, action={action!r})")
 
