@@ -23,9 +23,13 @@
 # Any module agent may read every module/<id>/environment hash (the Redis
 # ACL ns8-core's add-module grants), so no extra authorization is needed.
 #
-# A DAV login is the directory login, so DAV needs the module bound to the
-# same user domain as the mail instance. ActiveSync also carries the mail
-# itself, so it additionally needs the same mail module.
+# A DAV login is the directory login, so DAV needs the module on the same
+# user domain as the mail instance: bound to it (Nextcloud, SOGo), or using
+# a mail module whose user domain it is. WebTop binds nothing itself
+# (cluster/module_domains stays empty, found on a real node 2026-09-29); it
+# takes the user domain of its mail module's srv/tcp/imap key. ActiveSync
+# also carries the mail itself, so it additionally needs the same mail
+# module.
 
 import os
 
@@ -45,6 +49,15 @@ def _flag(value, default=True):
     if value is None:
         return default
     return value.strip().lower() == "true"
+
+
+def _mail_user_domain(rdb, mail_uuid):
+    """The user domain of the mail module with this UUID, from its imap
+    service key, or None."""
+    if not mail_uuid:
+        return None
+    providers = agent.list_service_providers(rdb, "imap", "tcp", {"module_uuid": mail_uuid})
+    return providers[0].get("user_domain") if providers else None
 
 
 def _module_ids(rdb):
@@ -81,7 +94,15 @@ def list_candidates(rdb, mail_module_id, user_domain):
         kind = agent.get_image_name_from_url(image_url)
         if kind not in DAV_PATHS:
             continue
-        if user_domain not in agent.get_bound_domain_list(rdb, module_id):
+        uuid_var = MAIL_UUID_VARS.get(kind)
+        module_mail_uuid = env.get(uuid_var) if uuid_var else None
+        same_mail = mail_uuid is not None and module_mail_uuid == mail_uuid
+        on_user_domain = (
+            user_domain in agent.get_bound_domain_list(rdb, module_id)
+            or same_mail
+            or _mail_user_domain(rdb, module_mail_uuid) == user_domain
+        )
+        if not on_user_domain:
             continue
         host = _host(kind, module_id, env)
         if not host:
@@ -92,8 +113,6 @@ def list_candidates(rdb, mail_module_id, user_domain):
             dav_url = f"https://{host}{DAV_PATHS[kind]}"
 
         activesync_url = None
-        uuid_var = MAIL_UUID_VARS.get(kind)
-        same_mail = uuid_var is not None and mail_uuid is not None and env.get(uuid_var) == mail_uuid
         if same_mail and (kind != "sogo" or _flag(env.get("ACTIVESYNC"))):
             activesync_url = f"https://{host}{ACTIVESYNC_PATH}"
 
