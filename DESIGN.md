@@ -81,7 +81,7 @@ The module:
 
 - **Which certificate.** "The default system cert" in NS8 is Traefik's: the certificate it holds for the service host (the node FQDN by default), which this module's own node-FQDN Autodiscover route already requests from Let's Encrypt. ns8-traefik sets no ACME `keyType`, so Traefik's default RSA 4096 applies and Let's Encrypt certificates qualify. It is read with Traefik's `get-certificate` action, which needs `traefik@node:certadm` (a broader role: it also covers set/delete certificate).
 - **Trust.** `get-certificate` reports `internal` (ACME), `custom` (uploaded) or `selfsigned` (Traefik's fallback when it holds nothing for the host). The fallback is never used: a profile signed with it shows as unverified, which looks worse than unsigned. Otherwise trust is checked with `openssl verify` against the node's system store (a stand-in for the devices' own stores; the ACME server can be changed to a private CA with `set-acme-server`). An untrusted certificate is still used, and the Settings page warns.
-- **Checked before automx sees it** (`automx/signing.py`, using the agent's `cryptography`, pinned at 39.0.0 by ns8-core): a certificate automx would reject is skipped with the reason recorded, so signing problems never take the service down. The reason and trust result go to `state/signing/status.json`, which `get-configuration` returns.
+- **Checked before automx sees it** (`automx/signing.py`, using the agent's `cryptography`: 39.0.0 on older cores, 46.0.3 on a Debian 13 node; both APIs are handled): a certificate automx would reject is skipped with the reason recorded, so signing problems never take the service down. The reason and trust result go to `state/signing/status.json`, which `get-configuration` returns.
 - **Files.** `state/signing/cert.pem` (full chain) and `key.pem` (0600), bind-mounted as a directory; staged, validated and promoted by `reload-automx` together with `automx.conf`, and removed when signing is turned off. Not backed up (the key is re-read from Traefik on every render).
 - **Renewal.** A `certificate-changed` handler (the same pattern as ns8-mail's) re-renders when the event names the service host; `reload-automx` restarts automx only if the material changed.
 - **Setting** `sign_profiles`, off by default: it puts the service host's TLS private key inside the automx container.
@@ -92,7 +92,9 @@ The module:
 
 **Real devices (2026-09-29):** an iPhone on iOS 26.7 shows the profile downloaded from ns8-test.2v6.in as signed, and the accounts in it work. macOS 15.8 shows it as "Signed: ns8-test.2v6.in" with no warning, while the same profile signed with an untrusted self-signed certificate shows a red "Unverified" next to its name: macOS has no green "Verified" badge like iOS, so the absence of the warning is what a verified signature looks like there.
 
-**VERIFY on a real node:** the Let's Encrypt certificate passes `openssl verify` on Debian nodes; `certificate-changed` fires on renewal with the node FQDN in `names`.
+**Debian 13 node (2026-09-29, not publicly reachable):** the full integration suite passes; with the public node's real Let's Encrypt chain, `signing.trusted()` run in the agent's Python there returns true (the leaf alone, without its intermediate, returns false, as expected; Traefik stores the full chain).
+
+**VERIFY on a real node:** `certificate-changed` fires on renewal with the node FQDN in `names`.
 
 ### Out of scope for v2 (possible later)
 

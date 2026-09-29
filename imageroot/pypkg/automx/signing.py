@@ -46,7 +46,9 @@ def fetch(fqdn):
 
 
 def _not_valid(cert):
-    # cryptography >= 42 has the *_utc properties; the NS8 agent ships 39.
+    # cryptography >= 42 has the *_utc properties. The NS8 agent's version
+    # depends on the node's Python: 39.0.0 on older cores, 46.0.3 on a
+    # Debian 13 node (2026-09-29).
     before = getattr(cert, "not_valid_before_utc", None) or cert.not_valid_before.replace(tzinfo=datetime.timezone.utc)
     after = getattr(cert, "not_valid_after_utc", None) or cert.not_valid_after.replace(tzinfo=datetime.timezone.utc)
     now = datetime.datetime.now(datetime.timezone.utc)
