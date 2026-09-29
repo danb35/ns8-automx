@@ -124,8 +124,10 @@ Attribute mapping:
 
 | Provider schema | Login | Address | Display name |
 |---|---|---|---|
-| `rfc2307` (OpenLDAP) | `uid` | `mail` | `cn` |
+| `rfc2307` (OpenLDAP) | `uid` | `mail` | `displayName` (else `cn`) |
 | `ad` (Samba AD) | `sAMAccountName` | `mail` | `displayName` |
+
+**CORRECTED, 2026-09-29** (real node, OpenLDAP): this table used to map the rfc2307 display name to `cn`. NS8's OpenLDAP keeps the full name in `displayName`, which is also what ns8-core's own `agent/ldapclient/rfc2307.py` reads; its `cn` holds only the first part of the name, with a trailing newline (`cn: "Test\n"`, `sn: " User\n"`, `displayName: "Test User"`). Multi-word names were therefore published as their first word; earlier passes used one-word names and missed it.
 
 Lookup rule for an address `local@domain`, in order:
 1. an entry whose login attribute equals `local` (covers `dan@domain` and `dan`);
