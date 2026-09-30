@@ -238,7 +238,7 @@ class NodeIntegration(unittest.TestCase):
 
     def test_04b_capitalized_autodiscover_path_is_served_and_routed(self):
         # DESIGN.md 3.4: Outlook/MobileSync also use /Autodiscover/Autodiscover.xml.
-        # automx serves it (patches/automx), and the node FQDN gets a route for
+        # automx serves it (since 3.0.0-beta.5), and the node FQDN gets a route for
         # it; the node routes don't wait for DNS, so they exist on any node.
         cls = type(self)
         address = TEST_USER_MAIL or 'nobody@%s' % MAIL_DOMAIN

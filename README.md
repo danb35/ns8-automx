@@ -54,8 +54,8 @@ internet access; those were exercised manually in the earlier passes.
 
 v2 (0.2.0, see DESIGN.md section 2) adds CalDAV/CardDAV and ActiveSync from Nextcloud,
 SOGo or WebTop, alias resolution, signed Apple profiles, and the capitalized
-`/Autodiscover/Autodiscover.xml` path (automx is patched to serve it until upstream releases
-the change). It was tested on Rocky 9 and Debian 13 nodes, a public node with real Let's
+`/Autodiscover/Autodiscover.xml` path (served by automx itself since 3.0.0-beta.5, where
+that change was contributed upstream). It was tested on Rocky 9 and Debian 13 nodes, a public node with real Let's
 Encrypt certificates, an iPhone (iOS 26.7) and a Mac (macOS 15.8):
 
 - The signed profile shows as signed on iOS and without the "Unverified" warning on macOS,

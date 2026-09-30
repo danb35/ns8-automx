@@ -32,7 +32,7 @@ AUTOCONFIG_PATHS = (
 # Traefik path matching is case-sensitive and set-route has no rewrite
 # option (DESIGN.md 3.4), so the capitalized spelling Outlook and
 # MobileSync clients also use gets its own route. automx serves it only
-# with the alias patch the Containerfile applies (patches/).
+# since 3.0.0-beta.5 (croessner/automx#2).
 AUTODISCOVER_PATHS = (
     "/autodiscover/autodiscover.xml",
     "/Autodiscover/Autodiscover.xml",
