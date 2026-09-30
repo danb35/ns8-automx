@@ -33,8 +33,9 @@ def _settings_path():
 # CalDAV/CardDAV or ActiveSync endpoint is published, or null for none
 # (DESIGN.md 2, v2 scope; automx/groupware.py).
 # resolve_aliases: hand out the owner's login for a mail alias that
-# delivers to one user (automx/aliases.py); on by default, with the same
-# disclosure trade-off as display_names.
+# delivers to one user (automx/aliases.py); on by default for new installs,
+# with the same disclosure trade-off as display_names, but off for
+# instances from before it existed (UPGRADE_DEFAULTS).
 # sign_profiles: sign Apple profiles with the service host's certificate
 # (automx/signing.py); off by default, it puts that TLS key in the
 # container.
@@ -46,6 +47,17 @@ DEFAULT_SETTINGS = {
     "activesync_module": None,
     "resolve_aliases": True,
     "sign_profiles": False,
+}
+
+
+# Settings added after 0.1.x that change what an existing instance hands
+# out: an instance whose settings.json predates them keeps its old
+# behavior until an administrator turns them on. 0.1.x never wrote these
+# keys, while 0.2.x writes every key at install and on every save, so a
+# settings.json that exists but lacks one comes from an older release (an
+# update, or a restored 0.1.x backup).
+UPGRADE_DEFAULTS = {
+    "resolve_aliases": False,
 }
 
 
@@ -75,7 +87,10 @@ def save_domains(domains):
 
 def load_settings():
     settings = dict(DEFAULT_SETTINGS)
-    settings.update(_load_json(_settings_path(), {}))
+    stored = _load_json(_settings_path(), None)
+    if stored is not None:
+        settings.update({k: v for k, v in UPGRADE_DEFAULTS.items() if k not in stored})
+        settings.update(stored)
     return settings
 
 
