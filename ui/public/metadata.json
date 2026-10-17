@@ -1,16 +1,22 @@
 {
   "name": "automx",
   "description": {
-    "en": "Email client autoconfiguration for NethServer 8 mail domains"
+    "en": "Email client autoconfiguration for NethServer 8 mail, calendars and contacts",
+    "de": "Automatische Konfiguration von E-Mail-Clients für Mail, Kalender und Kontakte von NethServer 8",
+    "es": "Configuración automática de clientes de correo para el correo, los calendarios y los contactos de NethServer 8",
+    "fr": "Configuration automatique des clients de messagerie pour la messagerie, les agendas et les contacts de NethServer 8",
+    "it": "Configurazione automatica dei client di posta per posta, calendari e contatti di NethServer 8",
+    "pt": "Configuração automática de clientes de correio para o correio, os calendários e os contactos do NethServer 8",
+    "pt_BR": "Configuração automática de clientes de e-mail para e-mail, calendários e contatos do NethServer 8"
   },
-  "categories": ["mail"],
+  "categories": ["system_administration", "collaboration"],
   "authors": [
     {
       "name": "Dan Brown"
     }
   ],
   "docs": {
-    "documentation_url": "https://github.com/danb35/ns8-automx",
+    "documentation_url": "https://github.com/danb35/ns8-automx/blob/master/docs/USER-GUIDE.md",
     "bug_url": "https://github.com/danb35/ns8-automx/issues",
     "code_url": "https://github.com/danb35/ns8-automx"
   },
