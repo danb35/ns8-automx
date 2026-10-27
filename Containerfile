@@ -18,7 +18,7 @@
 # (it has no upstream image tag to follow here), so this needs a manual bump
 # tracked the same way as any other pinned source dependency.
 
-FROM python:3.14.9-slim-trixie AS builder
+FROM python:3.15.0-slim-trixie AS builder
 
 ARG AUTOMX_REF=v3.0.0-beta.5
 
@@ -37,7 +37,7 @@ RUN python -m venv /opt/automx \
     && /opt/automx/bin/pip install --no-cache-dir --upgrade pip \
     && /opt/automx/bin/pip install --no-cache-dir '.[ldap]' dnspython==2.8.0
 
-FROM python:3.14.9-slim-trixie AS runtime
+FROM python:3.15.0-slim-trixie AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libldap2 \

@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.15'
       # automx/signing.py runs in the NS8 agent's Python environment, whose
       # cryptography depends on the node (39.0.0 on older cores, 46.0.3 on
       # Debian 13). Test the oldest; newer ones run the other branch of
