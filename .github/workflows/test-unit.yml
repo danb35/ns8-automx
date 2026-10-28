@@ -12,11 +12,14 @@ on:
       - 'imageroot/pypkg/**'
       - 'imageroot/bin/**'
       - 'tests/unit/**'
+      - '.github/workflows/test-unit.yml'
   pull_request:
     paths:
       - 'imageroot/pypkg/**'
       - 'imageroot/bin/**'
       - 'tests/unit/**'
+      - '.github/workflows/test-unit.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
