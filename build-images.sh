@@ -21,15 +21,16 @@ container=$(buildah from scratch)
 # Reuse existing nodebuilder-automx container, to speed up builds
 if ! buildah containers --format "{{.ContainerName}}" | grep -q nodebuilder-automx; then
     echo "Pulling NodeJS runtime..."
-    buildah from --name nodebuilder-automx -v "${PWD}:/usr/src:Z" docker.io/library/node:lts
+    buildah from --name nodebuilder-automx -v "${PWD}:/usr/src:Z" docker.io/library/node:26.12.0-bookworm
 fi
 
+# Node 25 and later no longer bundle corepack: install it from npm when missing
 echo "Build static UI files with node..."
 buildah run \
     --workingdir=/usr/src/ui \
     --env="NODE_OPTIONS=--openssl-legacy-provider" \
     nodebuilder-automx \
-    sh -c "corepack enable && yarn install && yarn build"
+    sh -c "(command -v corepack >/dev/null || npm install -g corepack) && corepack enable && yarn install && yarn build"
 
 # Add imageroot directory to the container image
 buildah add "${container}" imageroot /imageroot

@@ -1,5 +1,7 @@
 FROM node:26-bookworm
-RUN corepack enable \
+# Node 25 and later no longer bundle corepack: install it from npm when missing
+RUN (command -v corepack >/dev/null || npm install -g corepack) \
+    && corepack enable \
     && yarn set version stable
 WORKDIR /app
 ENV NODE_OPTIONS=--openssl-legacy-provider
