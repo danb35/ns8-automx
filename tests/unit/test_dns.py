@@ -137,6 +137,23 @@ class CompareRecordTests(unittest.TestCase):
         status, conflicts = dns.compare_record(self.srv, existing)
         self.assertEqual(status, dns.STATUS_OK)
 
+    def test_target_spelling_does_not_matter(self):
+        # Providers may return a target with or without its final dot, or in
+        # another case; dnshelper itself treats these as the same record.
+        cname = {"host": "autoconfig.example.com", "type": "CNAME", "value": "node.example.net."}
+        srv = {"host": "_autodiscover._tcp.example.com", "type": "SRV", "value": "0 0 443 node.example.net."}
+        for data in ("node.example.net", "node.example.net.", "Node.Example.NET."):
+            existing = [{"name": "autoconfig", "type": "CNAME", "ttl": 3600, "data": data}]
+            self.assertEqual(dns.compare_record(cname, existing)[0], dns.STATUS_OK, data)
+        for data in ("0 0 443 node.example.net", "0 0 443 NODE.example.net.", "0  0 443 node.example.net."):
+            existing = [{"name": "_autodiscover._tcp", "type": "SRV", "ttl": 3600, "data": data}]
+            self.assertEqual(dns.compare_record(srv, existing)[0], dns.STATUS_OK, data)
+
+    def test_srv_other_port_still_conflicts(self):
+        srv = {"host": "_autodiscover._tcp.example.com", "type": "SRV", "value": "0 0 443 node.example.net."}
+        existing = [{"name": "_autodiscover._tcp", "type": "SRV", "ttl": 3600, "data": "0 0 8443 node.example.net."}]
+        self.assertEqual(dns.compare_record(srv, existing)[0], dns.STATUS_CONFLICT)
+
 
 class RoutesReadyTests(unittest.TestCase):
     # DESIGN.md 5.6: route creation waits for exactly these two records --

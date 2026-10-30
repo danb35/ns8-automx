@@ -75,17 +75,31 @@ def dnshelper_relative_name(host, zone):
     return host[: -len(suffix)]
 
 
+def normalize_data(rtype, data):
+    """RDATA in a form where equivalent spellings compare equal: the target
+    (the last field of a CNAME or SRV) without its trailing dot and in lower
+    case, fields separated by single spaces. Providers do not all return a
+    target the way it was written (dnshelper's own live tests strip the
+    final dot before comparing), so this follows dnshelper's normData()
+    (helper/internal/dnsops/records.go) rather than an exact string match."""
+    fields = data.split()
+    if rtype in ("CNAME", "SRV") and fields:
+        fields[-1] = fields[-1].rstrip(".").lower()
+    return " ".join(fields)
+
+
 def compare_record(expected, existing_records_at_name):
     """expected: one entry from expected_records(). existing_records_at_name:
     dnshelper get-records() output already filtered to that name (any type).
     Returns (status, conflicting_records) -- DESIGN.md 5.2/5.3.3: a CNAME
     conflicts with any other record at the same name; an SRV conflicts only
     with a different SRV RRset at that name."""
+    want = normalize_data(expected["type"], expected["value"])
     if expected["type"] == "SRV":
         srv_records = [r for r in existing_records_at_name if r["type"] == "SRV"]
         if not srv_records:
             return STATUS_MISSING, []
-        if any(r["data"] == expected["value"] for r in srv_records):
+        if any(normalize_data("SRV", r["data"]) == want for r in srv_records):
             return STATUS_OK, []
         return STATUS_CONFLICT, srv_records
 
@@ -94,7 +108,7 @@ def compare_record(expected, existing_records_at_name):
         return STATUS_MISSING, []
     if len(existing_records_at_name) == 1 and (
         existing_records_at_name[0]["type"] == "CNAME"
-        and existing_records_at_name[0]["data"] == expected["value"]
+        and normalize_data("CNAME", existing_records_at_name[0]["data"]) == want
     ):
         return STATUS_OK, []
     return STATUS_CONFLICT, existing_records_at_name
