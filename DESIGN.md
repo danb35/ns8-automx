@@ -573,6 +573,29 @@ Not separately broken out in this pass: whether Outlook's Autodiscover specifica
 
 ## 12. Later phases
 
+### Planned for 0.3: per-domain settings
+
+Today every setting applies to all enabled domains at once: `automx.conf` has one `[global]` section, and only the `domains` allowlist varies (4.3). 0.3 makes most of them per domain, so for example one domain can hand out display names and SOGo calendars while another hands out neither. In scope:
+
+- `display_names`: whether a domain's responses include the user's display name (the disclosure trade-off in 8 is a per-domain decision).
+- `resolve_aliases`: whether a domain's aliases resolve to the owner's login.
+- `dav_module`: the CalDAV/CardDAV provider (Nextcloud, SOGo, WebTop or none) per domain.
+- `activesync_module`: the ActiveSync provider (SOGo, WebTop or none) per domain.
+
+Each keeps its current instance-wide value as the default, and a domain can override it. An update from 0.2.x keeps every domain on today's values, so nothing a client receives changes until the administrator sets an override.
+
+Probably staying instance-wide: `service_host` (one name for the SRV/CNAME target and the node-FQDN Autodiscover route, 5.1/4.4), `http2https` (could move per domain, since routes are already per domain, but no need has come up), and `sign_profiles` (one certificate, the service host's).
+
+To work out before implementing:
+
+- **VERIFY:** how automx 3 overrides `[global]` for one domain (a section per domain, or several provider sections chosen by domain), and whether the `script` backend and the `caldav`/`carddav`/`activesync` keys are allowed in it. If automx can't do this, the lookup script can still vary its own output per domain (it receives `%d`), which covers display names and aliases but not the groupware URLs.
+- The groupware candidates for a domain are those on the mail instance's user domain (2), the same set for every domain while one mail instance is supported, so the per-domain choice is between the same modules.
+- Storage: per-domain overrides belong next to the `enabled` flag in `state/domains.json`, which is already backed up; `set-domains` (or a new action) takes them, and `get-domains` returns the effective values.
+- UI: per-domain values in the Domains table (a row action opening the domain's settings), with Settings keeping the defaults.
+- The alias map (`state/aliases/aliases.json`) already lists aliases per domain; with `resolve_aliases` per domain, `refresh-aliases` leaves out the domains where it is off.
+
+### Other later phases
+
 - PACC TXT record and JSON, once the drafts stabilize (needs the cache-safe TXT rollover described in automx's migration guide).
 - Several mail instances and user domains (per-domain sections in `automx.conf`).
 - Autodiscover v2, OAuth public-client metadata.
