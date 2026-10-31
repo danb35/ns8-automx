@@ -211,8 +211,8 @@ responses are all correct — see DESIGN.md section 9 for the details.
 
 Cloning the module, or moving it to another node, re-creates the routes the same way,
 and so does every update, so route changes in a new release reach existing instances.
-On a move, a domain's routes wait until its DNS points at the new node. Neither has
-been tested on a node yet.
+On a move, a domain's routes wait until its DNS points at the new node. The update and
+a clone on the same node have been tested on a real node; a move to another node has not.
 
 ## Admin UI
 
