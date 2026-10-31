@@ -108,9 +108,19 @@ class HasZoneRecordsTests(unittest.TestCase):
         def tasks_run(agent_id, action, data, **kw):
             calls.append(data)
             if "records" in data:
-                # The input schema of dnshelper <= 0.4.4 has
-                # additionalProperties: false.
-                return {"exit_code": 10, "output": [{"error": "additionalProperties", "parameter": "records"}]}
+                # What dnshelper <= 0.4.4 answers (its input schema has
+                # additionalProperties: false), as seen on a test node.
+                return {
+                    "exit_code": 10,
+                    "output": [
+                        {
+                            "parameter": "(root)",
+                            "error": "(root)_additional_property_not_allowed",
+                            "value": data["records"],
+                            "field": "(root)",
+                        }
+                    ],
+                }
             return {"exit_code": 0, "output": {"managed": True, "zone": "example.com", "allowed": True}}
 
         with patched_client(tasks_run):
