@@ -43,6 +43,12 @@ def expected_records(domain, target_fqdn):
     ]
 
 
+def access_query(expected):
+    """expected_records() in the form dnshelper's has-zone takes to report
+    this module's access to each record."""
+    return [{"name": r["host"], "type": r["type"]} for r in expected]
+
+
 def routes_ready(dns_status):
     """True if the two CNAME records Traefik's routes/certs actually depend
     on (autoconfig, autodiscover) are both published and correct. The SRV

@@ -71,6 +71,8 @@
     "manual_description": "Create the records below with your DNS provider, then check again.",
     "not_permitted_title": "dnshelper has no access rule for this zone",
     "not_permitted_description": "dnshelper manages the zone {zone}, but this module has no rule to change it. Ask an administrator to add one in dnshelper's Access page.",
+    "partly_permitted_title": "dnshelper's access rule does not cover every record",
+    "partly_permitted_description": "This module has a rule for the zone {zone}, but it does not cover the records marked \"Not permitted\", so this module can neither see nor change them. Ask an administrator to extend the rule in dnshelper's Access page.",
     "suggested_rule": "Suggested rule:",
     "records_to_create": "Records to create",
     "create": "Create missing records",

@@ -71,6 +71,8 @@
     "manual_description": "Créez les enregistrements ci-dessous chez votre fournisseur DNS, puis vérifiez à nouveau.",
     "not_permitted_title": "dnshelper n'a pas de règle d'accès pour cette zone",
     "not_permitted_description": "dnshelper gère la zone {zone}, mais ce module n'a pas de règle pour la modifier. Demandez à un administrateur d'en ajouter une dans la page Accès de dnshelper.",
+    "partly_permitted_title": "La règle d'accès de dnshelper ne couvre pas tous les enregistrements",
+    "partly_permitted_description": "Ce module a une règle pour la zone {zone}, mais elle ne couvre pas les enregistrements marqués « Non autorisé » : ce module ne peut ni les voir ni les modifier. Demandez à un administrateur d'étendre la règle dans la page Accès de dnshelper.",
     "suggested_rule": "Règle suggérée :",
     "records_to_create": "Enregistrements à créer",
     "create": "Créer les enregistrements manquants",

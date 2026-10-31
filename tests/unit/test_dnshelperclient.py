@@ -84,5 +84,62 @@ class CallErrorParsingTests(unittest.TestCase):
             self.assertEqual(dnshelperclient.get_records("dnshelper1", "example.com"), [])
 
 
+class HasZoneRecordsTests(unittest.TestCase):
+    RECORDS = [{"name": "_autodiscover._tcp.example.com", "type": "SRV"}]
+
+    def test_sends_records_and_returns_per_record_access(self):
+        calls = []
+
+        def tasks_run(agent_id, action, data, **kw):
+            calls.append(data)
+            answer = [dict(r, read=False, write=False) for r in data["records"]]
+            return {"exit_code": 0, "output": {"managed": True, "zone": "example.com", "allowed": True, "records": answer}}
+
+        with patched_client(tasks_run):
+            info = dnshelperclient.has_zone("dnshelper1", "example.com", self.RECORDS)
+        self.assertEqual(calls, [{"name": "example.com", "records": self.RECORDS}])
+        self.assertEqual(
+            dnshelperclient.record_access(info, "_autodiscover._tcp.example.com", "SRV"), (False, False)
+        )
+
+    def test_falls_back_when_an_older_dnshelper_refuses_the_field(self):
+        calls = []
+
+        def tasks_run(agent_id, action, data, **kw):
+            calls.append(data)
+            if "records" in data:
+                # What dnshelper <= 0.4.4 answers (its input schema has
+                # additionalProperties: false), as seen on a test node.
+                return {
+                    "exit_code": 10,
+                    "output": [
+                        {
+                            "parameter": "(root)",
+                            "error": "(root)_additional_property_not_allowed",
+                            "value": data["records"],
+                            "field": "(root)",
+                        }
+                    ],
+                }
+            return {"exit_code": 0, "output": {"managed": True, "zone": "example.com", "allowed": True}}
+
+        with patched_client(tasks_run):
+            info = dnshelperclient.has_zone("dnshelper1", "example.com", self.RECORDS)
+        self.assertEqual(calls, [{"name": "example.com", "records": self.RECORDS}, {"name": "example.com"}])
+        # No per-record answer: treated as allowed, the behavior before.
+        self.assertEqual(dnshelperclient.record_access(info, "_autodiscover._tcp.example.com", "SRV"), (True, True))
+
+    def test_without_records_asks_the_plain_question(self):
+        calls = []
+
+        def tasks_run(agent_id, action, data, **kw):
+            calls.append(data)
+            return {"exit_code": 0, "output": {"managed": False, "zone": None, "allowed": False}}
+
+        with patched_client(tasks_run):
+            dnshelperclient.has_zone("dnshelper1", "example.com")
+        self.assertEqual(calls, [{"name": "example.com"}])
+
+
 if __name__ == "__main__":
     unittest.main()

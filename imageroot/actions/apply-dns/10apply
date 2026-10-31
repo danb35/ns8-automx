@@ -27,7 +27,11 @@ if target is None:
     )
     sys.exit(3)
 
-zone_info = dnshelperclient.has_zone(target, domain)
+settings = state.load_settings()
+target_fqdn = settings.get("service_host") or node.get_node_fqdn()
+expected = dns.expected_records(domain, target_fqdn)
+
+zone_info = dnshelperclient.has_zone(target, domain, dns.access_query(expected))
 if not zone_info["managed"] or not zone_info["allowed"]:
     agent.set_status("validation-failed")
     json.dump(
@@ -44,9 +48,10 @@ if not zone_info["managed"] or not zone_info["allowed"]:
     sys.exit(3)
 
 zone = zone_info["zone"]
-settings = state.load_settings()
-target_fqdn = settings.get("service_host") or node.get_node_fqdn()
-expected = dns.expected_records(domain, target_fqdn)
+# Leave out the records this module's access rules don't let it change
+# (check-dns shows them as not_permitted): dnshelper refuses a request as a
+# whole if any record in it isn't covered.
+expected = [r for r in expected if dnshelperclient.record_access(zone_info, r["host"], r["type"])[1]]
 
 try:
     existing_records = dnshelperclient.get_records(target, zone)

@@ -24,16 +24,28 @@
       />
       <template v-else>
         <NsInlineNotification
-          v-if="dns && dns.managed && dns.allowed === false"
+          v-if="
+            dns && dns.managed && (dns.allowed === false || hasNotPermitted)
+          "
           kind="warning"
-          :title="$t('dns_status.not_permitted_title')"
+          :title="
+            dns.allowed === false
+              ? $t('dns_status.not_permitted_title')
+              : $t('dns_status.partly_permitted_title')
+          "
           :showCloseButton="false"
           class="mg-bottom-md"
         >
           <template #description>
             <p>
               {{
-                $t("dns_status.not_permitted_description", { zone: dns.zone })
+                dns.allowed === false
+                  ? $t("dns_status.not_permitted_description", {
+                      zone: dns.zone,
+                    })
+                  : $t("dns_status.partly_permitted_description", {
+                      zone: dns.zone,
+                    })
               }}
             </p>
             <p class="mg-top-sm">{{ $t("dns_status.suggested_rule") }}</p>
@@ -216,6 +228,9 @@ export default {
     },
     hasConflict() {
       return this.dns.records.some((r) => r.status === "conflict");
+    },
+    hasNotPermitted() {
+      return this.dns.records.some((r) => r.status === "not_permitted");
     },
     canApply() {
       return this.dns && this.dns.managed && this.dns.allowed;

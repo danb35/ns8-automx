@@ -71,9 +71,33 @@ def _call(target, action, data):
     raise DnshelperError("unknown", str(fallback) if fallback else "dnshelper call failed")
 
 
-def has_zone(target, name):
-    """{"managed": bool, "zone": str|None, "allowed": bool}"""
+def has_zone(target, name, records=None):
+    """{"managed": bool, "zone": str|None, "allowed": bool}, plus, when
+    records ([{"name": <full host name>, "type"}]) are given and dnshelper
+    supports it, "records": [{"name", "type", "read", "write"}] in the same
+    order: what this module's access rules let it do with each one.
+
+    "allowed" only says that some rule names the zone. A rule that covers
+    the CNAMEs but not the SRV record hides the SRV from get-records, which
+    looked exactly like a missing record (found on a user's node with OVH,
+    2026-10-30). dnshelper releases up to 0.4.4 refuse the records field
+    (their has-zone schema does not allow it), so on any refusal ask again
+    without it; has-zone never contacts the DNS provider, so this is cheap."""
+    if records:
+        try:
+            return _call(target, "has-zone", {"name": name, "records": records})
+        except DnshelperError:
+            pass
     return _call(target, "has-zone", {"name": name})
+
+
+def record_access(zone_info, host, rtype):
+    """(read, write) for one record from has_zone()'s per-record answer;
+    (True, True) when dnshelper gave none, which is the old behavior."""
+    for r in zone_info.get("records") or []:
+        if r["name"] == host and r["type"] == rtype:
+            return r["read"], r["write"]
+    return True, True
 
 
 def get_records(target, zone, name=None, type=None):

@@ -27,7 +27,7 @@ def domain_dns_status(domain, target_fqdn, dnshelper_target):
             "records": _resolver_check(expected),
         }
 
-    zone_info = dnshelperclient.has_zone(dnshelper_target, domain)
+    zone_info = dnshelperclient.has_zone(dnshelper_target, domain, dns.access_query(expected))
     if not zone_info["managed"]:
         return {
             "managed": False,
@@ -68,6 +68,12 @@ def domain_dns_status(domain, target_fqdn, dnshelper_target):
         relative_name = dns.dnshelper_relative_name(record["host"], zone)
         existing_at_name = [r for r in zone_records if r["name"] == relative_name]
         status, conflicts = dns.compare_record(record, existing_at_name)
+        can_read, can_write = dnshelperclient.record_access(zone_info, record["host"], record["type"])
+        # A record the rules hide from get-records is not missing, and one
+        # the rules don't let us change can't be created or overwritten:
+        # both need an access rule, not a DNS change.
+        if not can_read or (status in (dns.STATUS_MISSING, dns.STATUS_CONFLICT) and not can_write):
+            status, conflicts = dns.STATUS_NOT_PERMITTED, []
         entry = {**record, "status": status}
         if conflicts:
             entry["conflicts"] = conflicts

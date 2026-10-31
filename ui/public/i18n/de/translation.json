@@ -71,6 +71,8 @@
     "manual_description": "Erstellen Sie die folgenden Einträge bei Ihrem DNS-Anbieter und prüfen Sie danach erneut.",
     "not_permitted_title": "dnshelper hat keine Zugriffsregel für diese Zone",
     "not_permitted_description": "dnshelper verwaltet die Zone {zone}, aber dieses Modul hat keine Regel, um sie zu ändern. Bitten Sie einen Administrator, auf der Zugriffsseite von dnshelper eine hinzuzufügen.",
+    "partly_permitted_title": "Die Zugriffsregel von dnshelper deckt nicht alle Einträge ab",
+    "partly_permitted_description": "Dieses Modul hat eine Regel für die Zone {zone}, aber sie deckt die mit „Nicht erlaubt“ markierten Einträge nicht ab, daher kann dieses Modul sie weder sehen noch ändern. Bitten Sie einen Administrator, die Regel auf der Zugriffsseite von dnshelper zu erweitern.",
     "suggested_rule": "Vorgeschlagene Regel:",
     "records_to_create": "Zu erstellende Einträge",
     "create": "Fehlende Einträge erstellen",
