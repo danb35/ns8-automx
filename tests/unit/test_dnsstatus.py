@@ -22,7 +22,14 @@ from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "imageroot", "pypkg"))
-from automx import dnsstatus  # noqa: E402
+sys.path.insert(0, HERE)
+import stub_agent  # noqa: E402
+
+# dnsstatus imports dnshelperclient, which imports "agent" at module level.
+# Without the stub this file only passed when another test had loaded it.
+_agent = stub_agent.build()
+with mock.patch.dict(sys.modules, {"agent": _agent, "agent.ldapproxy": _agent.ldapproxy}):
+    from automx import dnsstatus  # noqa: E402
 
 
 class ResolverCheckSubprocessTests(unittest.TestCase):
@@ -68,6 +75,64 @@ class ResolverCheckSubprocessTests(unittest.TestCase):
             result = dnsstatus._resolver_check(expected)
 
         self.assertEqual(result, script_output)
+
+
+class PerRecordAccessTests(unittest.TestCase):
+    """A rule that names the zone but not every record (a user's node,
+    2026-10-30: CNAME in all zones, SRV only in another zone). dnshelper's
+    get-records hides the SRV, which must not be reported as missing."""
+
+    DOMAIN = "example.com"
+    TARGET = "node.example.net"
+    CNAMES = [
+        {"name": "autoconfig", "type": "CNAME", "ttl": 0, "data": "node.example.net."},
+        {"name": "autodiscover", "type": "CNAME", "ttl": 0, "data": "node.example.net."},
+    ]
+
+    def status(self, zone_info, zone_records):
+        client = dnsstatus.dnshelperclient
+        with mock.patch.object(client, "has_zone", return_value=zone_info) as has_zone, mock.patch.object(
+            client, "get_records", return_value=zone_records
+        ):
+            out = dnsstatus.domain_dns_status(self.DOMAIN, self.TARGET, "module/dnshelper1")
+        self.assertEqual(
+            has_zone.call_args[0][2],
+            [
+                {"name": "autoconfig.example.com", "type": "CNAME"},
+                {"name": "autodiscover.example.com", "type": "CNAME"},
+                {"name": "_autodiscover._tcp.example.com", "type": "SRV"},
+            ],
+        )
+        return {r["type"] + " " + r["host"]: r["status"] for r in out["records"]}
+
+    def access(self, srv_read, srv_write):
+        return [
+            {"name": "autoconfig.example.com", "type": "CNAME", "read": True, "write": True},
+            {"name": "autodiscover.example.com", "type": "CNAME", "read": True, "write": True},
+            {"name": "_autodiscover._tcp.example.com", "type": "SRV", "read": srv_read, "write": srv_write},
+        ]
+
+    def test_hidden_record_is_not_permitted_not_missing(self):
+        info = {"managed": True, "zone": "example.com", "allowed": True, "records": self.access(False, False)}
+        statuses = self.status(info, self.CNAMES)
+        self.assertEqual(statuses["SRV _autodiscover._tcp.example.com"], dnsstatus.dns.STATUS_NOT_PERMITTED)
+        self.assertEqual(statuses["CNAME autoconfig.example.com"], dnsstatus.dns.STATUS_OK)
+
+    def test_readable_but_not_writable(self):
+        info = {"managed": True, "zone": "example.com", "allowed": True, "records": self.access(True, False)}
+        srv = {"name": "_autodiscover._tcp", "type": "SRV", "ttl": 0, "data": "0 0 443 node.example.net."}
+        # Present and right: nothing to change, so it is simply ok.
+        self.assertEqual(self.status(info, self.CNAMES + [srv])["SRV _autodiscover._tcp.example.com"], "ok")
+        # Missing: it can't be created without a rule.
+        self.assertEqual(
+            self.status(info, self.CNAMES)["SRV _autodiscover._tcp.example.com"], dnsstatus.dns.STATUS_NOT_PERMITTED
+        )
+
+    def test_older_dnshelper_without_per_record_answer_keeps_old_behavior(self):
+        info = {"managed": True, "zone": "example.com", "allowed": True}
+        self.assertEqual(
+            self.status(info, self.CNAMES)["SRV _autodiscover._tcp.example.com"], dnsstatus.dns.STATUS_MISSING
+        )
 
 
 if __name__ == "__main__":

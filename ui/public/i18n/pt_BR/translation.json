@@ -71,6 +71,8 @@
     "manual_description": "Crie os registros abaixo no seu provedor de DNS e verifique novamente.",
     "not_permitted_title": "O dnshelper não tem uma regra de acesso para esta zona",
     "not_permitted_description": "O dnshelper gerencia a zona {zone}, mas este módulo não tem uma regra para alterá-la. Peça a um administrador para adicionar uma na página de Acesso do dnshelper.",
+    "partly_permitted_title": "A regra de acesso do dnshelper não cobre todos os registros",
+    "partly_permitted_description": "Este módulo tem uma regra para a zona {zone}, mas ela não cobre os registros marcados como \"Não permitido\", então este módulo não pode vê-los nem alterá-los. Peça a um administrador para ampliar a regra na página de Acesso do dnshelper.",
     "suggested_rule": "Regra sugerida:",
     "records_to_create": "Registros a criar",
     "create": "Criar registros ausentes",

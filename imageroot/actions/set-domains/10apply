@@ -70,14 +70,17 @@ with reconcile.lock():
     state.save_domains(domains_state)
 
     for domain in newly_disabled_with_dns_removal:
-        zone_info = dnshelperclient.has_zone(dnshelper_target, domain)
+        settings = state.load_settings()
+        target_fqdn = settings.get("service_host") or node.get_node_fqdn()
+        expected = dns.expected_records(domain, target_fqdn)
+        zone_info = dnshelperclient.has_zone(dnshelper_target, domain, dns.access_query(expected))
         if not zone_info["managed"] or not zone_info["allowed"]:
             continue
         zone = zone_info["zone"]
-        settings = state.load_settings()
-        target_fqdn = settings.get("service_host") or node.get_node_fqdn()
         to_delete = []
-        for record in dns.expected_records(domain, target_fqdn):
+        for record in expected:
+            if not dnshelperclient.record_access(zone_info, record["host"], record["type"])[1]:
+                continue  # not ours to remove under the access rules
             to_delete.append(
                 {
                     "name": dns.dnshelper_relative_name(record["host"], zone),
