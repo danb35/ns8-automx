@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Runs after the inherited 10recvstate has copied state/ from the source
+# instance (a clone, or a move to another node, which is a clone with
+# replace). The routes are named after the module id, so the new instance
+# has none: the source's stay with the source, and on a move ns8-traefik's
+# module-removed handler deletes them. Without this step autoconfig stops
+# working until the administrator saves a setting. reconcile() also
+# enables and starts automx when a domain is enabled; on a move to another
+# node the routes then wait for DNS to point at the new node (DESIGN.md 5.6).
+
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
+
+import agent
+from automx import reconcile
+
+rdb = agent.redis_connect(use_replica=True)
+reconcile.reconcile(rdb)

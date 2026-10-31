@@ -220,6 +220,8 @@ Source of truth for domains is the mail module. The module stores only what it o
 
 Backup (`imageroot/etc/state-include.conf`): `state/domains.json` and any settings file. Restore re-runs the renderer, re-creates routes and re-checks DNS; it must tolerate the mail module or accounts provider not yet being present.
 
+Clone and move (a clone that replaces the source) run `reconcile()` too (`actions/clone-module/50reconcile`): routes are named after the module id, so the new instance has none, and on a move ns8-traefik's `module-removed` handler deletes the source's. Updates also run it (`update-module.d/30reconcile`, after `20restart`), since a restart re-renders the config but never touches routes: the capitalized Autodiscover route added in 0.2.0 reached an instance updated from 0.1.x only at its next save. Found by a nethserver-ns8-module skill review, 2026-10-31; **not yet tested on a node.**
+
 ### 4.3 Configuration rendering
 
 Inputs: enabled domains, mail hostname and public ports, user domain and LDAP parameters, node FQDN. Output: one INI file.
