@@ -35,7 +35,7 @@ RUN git clone --depth=1 --branch="${AUTOMX_REF}" \
 
 RUN python -m venv /opt/automx \
     && /opt/automx/bin/pip install --no-cache-dir --upgrade pip \
-    && /opt/automx/bin/pip install --no-cache-dir '.[ldap]' dnspython==2.8.0
+    && /opt/automx/bin/pip install --no-cache-dir '.[ldap]' dnspython==2.9.1
 
 FROM python:3.14.10-slim-trixie AS runtime
 
