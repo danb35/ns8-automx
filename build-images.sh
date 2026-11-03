@@ -21,7 +21,7 @@ container=$(buildah from scratch)
 # Reuse existing nodebuilder-automx container, to speed up builds
 if ! buildah containers --format "{{.ContainerName}}" | grep -q nodebuilder-automx; then
     echo "Pulling NodeJS runtime..."
-    buildah from --name nodebuilder-automx -v "${PWD}:/usr/src:Z" docker.io/library/node:26.12.1-bookworm
+    buildah from --name nodebuilder-automx -v "${PWD}:/usr/src:Z" docker.io/library/node:26.13.0-bookworm
 fi
 
 # Node 25 and later no longer bundle corepack: install it from npm when missing
