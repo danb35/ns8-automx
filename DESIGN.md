@@ -298,6 +298,8 @@ automx's `automx dns records --all-domains --format json --service-host <node fq
 
 **CORRECTED, 2026-11-03:** there used to be an `unmanaged` status for a domain whose zone dnshelper does not manage, set without looking the records up, although 5.4 says to resolve them. Since 5.6's gate releases routes only on `ok`, such a domain stayed `waiting_for_dns` forever, even with correct records created by hand. It now gets the resolver check of 5.4, the same as when dnshelper is absent; `managed: false` is what tells the UI that DNS is manual, and the Domains table shows a "Manual" tag beside the record status for such a domain (7). Found by reading the code while testing on a node; the 2026-09-23 pass below did not create records by hand for its `unmanaged` domain, so it never reached the gate.
 
+**Public node (2026-11-03, ns8-test.2v6.in, Rocky 9, dnshelper managing only `2v6.in`):** `db5.us`, a mail domain with its DNS at Cloudflare outside dnshelper, stayed `waiting_for_dns` with no routes until its records were created by hand and resolved from the node; one `check-dns` then took it to `configured`. Let's Encrypt issued certificates for `autoconfig.db5.us` and `autodiscover.db5.us` on that first attempt, and from outside the node Autoconfig returned the looked-up login and display name and both Autodiscover spellings returned 200 over HTTPS. `automx.2v6.in`, in the managed zone, was unaffected.
+
 ### 5.3 With dnshelper present
 
 1. `has-zone` with the record's host name (for example `autoconfig.mail.example.com`) to find the managed zone, then the record name relative to that zone. A mail domain can be a subdomain of the managed zone.
