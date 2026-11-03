@@ -3,12 +3,13 @@
 # Copyright (C) 2026 Dan Brown
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Resolver-based DNS check for the no-dnshelper path (DESIGN.md 5.4). Runs
-# INSIDE an ephemeral automx-app container (baked into the image, like
+# DNS check for records dnshelper doesn't cover (DESIGN.md 5.4). Runs INSIDE an
+# ephemeral automx-app container (baked into the image, like
 # automx-ldap-lookup), invoked by the check-dns action via a one-off
 # `podman run --rm`, using default (internet-facing) container networking --
 # this checks the public view, which is what clients actually see, not
-# anything ldapproxy/host-loopback related.
+# anything ldapproxy/host-loopback related. It asks the zone's authoritative
+# servers directly, falling back to the node's resolver if it can't reach them.
 #
 # stdin:  JSON list of {"host", "type", "value"} (automx.dns.expected_records
 #         shape, from the host-side automx.dns module).
@@ -26,57 +27,121 @@ import json
 import sys
 
 import dns.exception
+import dns.flags
+import dns.message
+import dns.query
+import dns.rcode
+import dns.rdatatype
 import dns.resolver
 
 TIMEOUT_SECONDS = 5
+# One authoritative server's answer. Short, and bounded by MAX_NAMESERVERS,
+# so a network that blocks outbound port 53 still leaves time for the resolver
+# fallback inside the 30 seconds dnsstatus allows this script.
+QUERY_TIMEOUT_SECONDS = 2
+MAX_NAMESERVERS = 4
+
+# Set once direct queries have failed, so the remaining records of this run go
+# straight to the resolver instead of each waiting for the same timeouts.
+direct_queries_failed = False
 
 
 def normalize_target(value):
     return value.rstrip(".").lower()
 
 
-def check_cname(host, expected_value):
-    try:
-        answer = dns.resolver.resolve(host, "CNAME", lifetime=TIMEOUT_SECONDS)
-    except dns.resolver.NXDOMAIN:
-        return "missing"
-    except dns.resolver.NoAnswer:
-        return "missing"
-    except dns.exception.DNSException:
-        return "unknown"
+def canonical_value(rtype, value):
+    """A record's value as text, from an expected value or an rdata's to_text():
+    the target (the last field) normalized, the fields single-spaced."""
+    fields = str(value).split()
+    return " ".join(fields[:-1] + [normalize_target(fields[-1])])
 
-    targets = {normalize_target(str(rdata.target)) for rdata in answer}
-    if normalize_target(expected_value) in targets:
+
+def server_address(nameserver):
+    for address_type in ("A", "AAAA"):
+        try:
+            return str(dns.resolver.resolve(nameserver, address_type, lifetime=TIMEOUT_SECONDS)[0])
+        except dns.exception.DNSException:
+            continue
+    return None
+
+
+def query_server(address, host, rtype):
+    """The set of values one authoritative server holds for host (empty if it
+    has none), or None if it gave no authoritative answer."""
+    query = dns.message.make_query(host, rtype)
+    query.flags &= ~dns.flags.RD
+    try:
+        response, _ = dns.query.udp_with_fallback(query, address, timeout=QUERY_TIMEOUT_SECONDS)
+    except (dns.exception.DNSException, OSError):
+        return None
+    if not response.flags & dns.flags.AA:
+        return None
+    if response.rcode() == dns.rcode.NXDOMAIN:
+        return set()
+    if response.rcode() != dns.rcode.NOERROR:
+        return None
+    wanted = dns.rdatatype.from_text(rtype)
+    return {
+        canonical_value(rtype, rdata.to_text())
+        for rrset in response.answer
+        if rrset.rdtype == wanted and normalize_target(str(rrset.name)) == normalize_target(host)
+        for rdata in rrset
+    }
+
+
+def authoritative_answers(host, rtype):
+    """What each of the zone's authoritative servers holds for host, or None if
+    none of them could be asked. Only the zone and its nameservers come from
+    the node's resolver; those rarely change, unlike a just-created record,
+    which a resolver can keep reporting as absent until its negative cache
+    expires (found on a public node, 2026-11-03)."""
+    global direct_queries_failed
+    if direct_queries_failed:
+        return None
+    answers = []
+    try:
+        zone = dns.resolver.zone_for_name(host, lifetime=TIMEOUT_SECONDS)
+        nameservers = dns.resolver.resolve(zone, "NS", lifetime=TIMEOUT_SECONDS)
+    except dns.exception.DNSException:
+        nameservers = []
+    for rdata in list(nameservers)[:MAX_NAMESERVERS]:
+        address = server_address(rdata.target)
+        answer = query_server(address, host, rtype) if address else None
+        if answer is not None:
+            answers.append(answer)
+    if not answers:
+        direct_queries_failed = True
+        return None
+    return answers
+
+
+def resolver_answer(host, rtype):
+    """The fallback, for a network that only allows DNS through its own
+    resolver. Raises DNSException if the lookup itself fails."""
+    try:
+        answer = dns.resolver.resolve(host, rtype, lifetime=TIMEOUT_SECONDS)
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+        return set()
+    return {canonical_value(rtype, rdata.to_text()) for rdata in answer}
+
+
+def check_record(host, rtype, expected_value):
+    """A record counts as "ok" only when every server that answered has it: a
+    certificate validator can reach any of them, and a route gets one attempt
+    at a certificate (DESIGN.md 5.6)."""
+    answers = authoritative_answers(host, rtype)
+    if answers is None:
+        try:
+            answers = [resolver_answer(host, rtype)]
+        except dns.exception.DNSException:
+            return "unknown"
+    expected = canonical_value(rtype, expected_value)
+    if all(expected in answer for answer in answers):
         return "ok"
-    return "conflict"
-
-
-def check_srv(host, expected_value):
-    try:
-        answer = dns.resolver.resolve(host, "SRV", lifetime=TIMEOUT_SECONDS)
-    except dns.resolver.NXDOMAIN:
-        return "missing"
-    except dns.resolver.NoAnswer:
-        return "missing"
-    except dns.exception.DNSException:
-        return "unknown"
-
-    expected_priority, expected_weight, expected_port, expected_target = expected_value.split()
-    for rdata in answer:
-        actual = (
-            str(rdata.priority),
-            str(rdata.weight),
-            str(rdata.port),
-            normalize_target(str(rdata.target)),
-        )
-        if actual == (
-            expected_priority,
-            expected_weight,
-            expected_port,
-            normalize_target(expected_target),
-        ):
-            return "ok"
-    return "conflict"
+    if any(answer and expected not in answer for answer in answers):
+        return "conflict"
+    return "missing"
 
 
 def main():
@@ -85,12 +150,7 @@ def main():
     for record in expected:
         host, rtype, value = record["host"], record["type"], record["value"]
         try:
-            if rtype == "CNAME":
-                status = check_cname(host, value)
-            elif rtype == "SRV":
-                status = check_srv(host, value)
-            else:
-                status = "unknown"
+            status = check_record(host, rtype, value) if rtype in ("CNAME", "SRV") else "unknown"
         except Exception:
             status = "unknown"
         results.append({"host": host, "type": rtype, "value": value, "status": status})

@@ -4,8 +4,8 @@
 #
 # Computes the DNS status (DESIGN.md 5.2/5.3/5.4) for one domain's three
 # expected records, either through dnshelper (if present and covering the
-# zone) or through a resolver-based check (imageroot/bin/automx-dns-check,
-# run in an ephemeral automx-app container -- see VERIFY item 7). A zone
+# zone) or through a DNS lookup (imageroot/bin/automx-dns-check, run in an
+# ephemeral automx-app container -- see VERIFY item 7). A zone
 # dnshelper doesn't manage gets the resolver check too: its records are
 # created by hand, and dns.routes_ready() needs to see when they are published.
 
