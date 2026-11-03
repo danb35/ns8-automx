@@ -71,11 +71,12 @@ Turning a domain on:
 1. Reads the mail domain's user domain and looks up your directory's connection details.
 2. Renders and validates automx's own configuration, and starts (or reloads) its
    service.
-3. If `autoconfig.<domain>` and `autodiscover.<domain>` already resolve to this node,
-   creates their Traefik routes right away, with a Let's Encrypt certificate.
+3. If the CNAME records for `autoconfig.<domain>` and `autodiscover.<domain>` are already
+   published and point at this node, creates their Traefik routes right away, with a
+   Let's Encrypt certificate.
 
-If those two host names don't resolve yet — the usual case the first time you enable a
-domain, before its DNS records exist — automx deliberately does **not** create the route
+If those two records aren't in place yet — the usual case the first time you enable a
+domain — automx deliberately does **not** create the route
 yet, and the Domains page shows the domain as **waiting for DNS** instead. This is by
 design, not a glitch to wait out: a route created before its DNS is ready gets exactly one
 shot at a certificate from Let's Encrypt, and a route stuck like that can stay
@@ -87,7 +88,7 @@ section) and automx creates the route and certificate automatically the next tim
 checks. Opening the domain's DNS status dialog, pressing **Check again** there, or
 confirming **Create missing records** (with dnshelper) all trigger that check on their
 own, so publishing the records is the last step, not a separate "now go create the route"
-one.
+one. The check that creates the route can take up to a minute or so.
 
 A domain that later disappears from the mail module (its mail domain was removed) is
 marked **Orphaned**: automx keeps remembering whether it was enabled, but there's nothing
@@ -109,15 +110,19 @@ Each enabled domain needs three DNS records to work everywhere:
 | `_autodiscover._tcp.<domain>` | SRV | The same, on port 443 |
 
 Open the row's overflow menu (⋮) and choose **DNS status**. What you see there depends
-on whether dnshelper is installed and covers the domain's zone:
+on whether dnshelper is installed and covers the domain's zone. Either way, the dialog
+lists the three records with each one's current status — *OK*, *Missing*, *Conflict*.
 
 **Without dnshelper**, or if dnshelper doesn't manage this particular zone, you get an
-info banner saying so and a copyable list of the exact records to create — name, type,
-value — for your own DNS provider's control panel. Create them there, then use **Check
-again** in the same dialog once you have.
+info banner saying so, and the Domains page shows a **Manual** tag beside the domain's DNS
+status. Create the listed records — name, type, value — in your own DNS provider's control
+panel, then use **Check again** in the same dialog. automx asks the DNS servers that host
+your zone directly, so a new record normally shows as *OK* right away. If it can't reach
+those servers (some networks block outgoing DNS), it asks this node's usual DNS resolver
+instead, and a new record can show as *Missing* for a while, sometimes half an hour,
+until the resolver's cached answer expires.
 
-**With dnshelper covering the zone**, the dialog instead shows each record's live status
-— *OK*, *Missing*, *Conflict* — and offers buttons to act on them:
+**With dnshelper covering the zone**, the dialog also offers buttons to fix them:
 
 - **Create missing records** appends whatever is missing.
 - **Overwrite conflicting records** replaces a record that already exists with a
@@ -181,7 +186,7 @@ dialog: if you add the zone or the rule *after* a domain was already enabled her
 notices on its own next check, with nothing to toggle or re-save.
 
 If you ever remove dnshelper, or the access rule, automx falls back to showing the
-manual copyable instructions again — the records it already created are left alone
+records to create by hand again — the records it already created are left alone
 either way, since removing dnshelper's access doesn't touch anything already published.
 
 ## Settings
@@ -291,8 +296,8 @@ missing, the same as it would for a domain enabled for the first time.
 
 | What you see | What it means and what to do |
 |---|---|
-| A domain stays **Waiting for DNS** | Its `autoconfig`/`autodiscover` names don't resolve to this node yet, so automx has deliberately held off creating its route rather than let it fail its one shot at a certificate. Publish the records (see [Publishing the DNS records](#publishing-the-dns-records)) — the route and certificate are created automatically the next time automx checks, which opening the DNS status dialog or pressing **Check again** both do |
-| **DNS is not managed by dnshelper for this domain** | Either dnshelper isn't installed, or it's installed but the zone covering this domain isn't one of its zones. Follow the copyable instructions shown, or add the zone on dnshelper's own Zones page |
+| A domain stays **Waiting for DNS** | Its `autoconfig`/`autodiscover` CNAME records aren't published and pointing at this node yet (an A record at those names doesn't count), so automx has deliberately held off creating its route rather than let it fail its one shot at a certificate. Publish the records (see [Publishing the DNS records](#publishing-the-dns-records)) — the route and certificate are created automatically the next time automx checks, which opening the DNS status dialog or pressing **Check again** both do |
+| **DNS is not managed by dnshelper for this domain** | Either dnshelper isn't installed, or it's installed but the zone covering this domain isn't one of its zones. Create the records shown with your DNS provider, or add the zone on dnshelper's own Zones page |
 | **dnshelper has no access rule for this zone** | dnshelper knows the zone, but this automx instance hasn't been given a rule for it yet. Add the rule shown in the dialog — see [Optional: managing DNS through dnshelper](#optional-managing-dns-through-dnshelper) |
 | A DNS record shows **Conflict** | Something else already exists at that name with a different value (or a different record type). Use **Overwrite conflicting records** if dnshelper manages the zone, after reviewing the preview, or fix it at your DNS provider directly otherwise |
 | A client shows the person's raw email address instead of their name | Either **Include display names** is off in Settings, or the address the client asked about is a mail *alias* that automx can't resolve: one shared by several people, one added in the last 15 minutes, or any alias while **Resolve mail aliases** is off. The client then falls back to a generic answer and the person enters their own username |

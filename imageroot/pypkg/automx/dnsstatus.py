@@ -6,7 +6,7 @@
 # expected records, either through dnshelper (if present and covering the
 # zone) or through a DNS lookup (imageroot/bin/automx-dns-check, run in an
 # ephemeral automx-app container -- see VERIFY item 7). A zone
-# dnshelper doesn't manage gets the resolver check too: its records are
+# dnshelper doesn't manage gets that lookup too: its records are
 # created by hand, and dns.routes_ready() needs to see when they are published.
 
 import json
