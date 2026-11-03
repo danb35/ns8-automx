@@ -288,7 +288,6 @@ export default {
           missing: "gray",
           conflict: "red",
           not_permitted: "magenta",
-          unmanaged: "gray",
           unknown: "gray",
         }[status] || "gray"
       );

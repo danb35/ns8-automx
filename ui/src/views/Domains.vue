@@ -115,6 +115,11 @@
                     :label="$t('domains.dns_status_' + row.dnsSummary)"
                     :kind="dnsTagKind(row.dnsSummary)"
                   />
+                  <NsTag
+                    v-if="!row.dns.managed"
+                    :label="$t('domains.dns_manual')"
+                    kind="blue"
+                  />
                 </cv-data-table-cell>
                 <cv-data-table-cell>
                   <NsTag
@@ -257,7 +262,6 @@ export default {
         "conflict",
         "unknown",
         "missing",
-        "unmanaged",
         "ok",
       ];
       for (const status of priority) {
@@ -274,7 +278,6 @@ export default {
           missing: "gray",
           conflict: "red",
           not_permitted: "magenta",
-          unmanaged: "gray",
           unknown: "gray",
         }[status] || "gray"
       );

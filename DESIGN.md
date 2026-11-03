@@ -294,7 +294,9 @@ automx's `automx dns records --all-domains --format json --service-host <node fq
 
 ### 5.2 Status model, per domain and record
 
-`ok` (present and matching) | `missing` | `conflict` (something else exists at that name) | `unmanaged` (no dnshelper zone covers it, cannot be changed automatically) | `not_permitted` (zone managed but no access rule for this module, or a rule that does not cover this record) | `unknown` (lookup failed).
+`ok` (present and matching) | `missing` | `conflict` (something else exists at that name) | `not_permitted` (zone managed but no access rule for this module, or a rule that does not cover this record) | `unknown` (lookup failed).
+
+**CORRECTED, 2026-11-03:** there used to be an `unmanaged` status for a domain whose zone dnshelper does not manage, set without looking the records up, although 5.4 says to resolve them. Since 5.6's gate releases routes only on `ok`, such a domain stayed `waiting_for_dns` forever, even with correct records created by hand. It now gets the resolver check of 5.4, the same as when dnshelper is absent; `managed: false` is what tells the UI that DNS is manual, and the Domains table shows a "Manual" tag beside the record status for such a domain (7). Found by reading the code while testing on a node; the 2026-09-23 pass below did not create records by hand for its `unmanaged` domain, so it never reached the gate.
 
 ### 5.3 With dnshelper present
 
@@ -528,7 +530,7 @@ For each provider, test: a user whose primary address matches the login (`dan@do
 | dnshelper installed, zone managed, no access rule yet | `not_permitted` path (5.3.6): the module detects the missing rule and surfaces the exact rule to add, rather than failing opaquely |
 | dnshelper installed, zone managed, rule granted, no existing records | Create path: `dry_run` preview, then `append-records`, then a passing DNS status |
 | dnshelper installed, zone managed, rule granted, conflicting record already present (e.g. an existing A record at `autoconfig.<domain>`) | Conflict detection (5.2) and both the overwrite path (`delete-records` + `append-records`) and the skip path |
-| dnshelper installed, but the domain's zone is *not* one dnshelper manages | `unmanaged` status; module falls back to the manual/check-only flow for that domain even though dnshelper is present |
+| dnshelper installed, but the domain's zone is *not* one dnshelper manages | `managed: false` with resolver-checked statuses; module falls back to the manual/check-only flow for that domain even though dnshelper is present, and creates its routes once the records resolve |
 | dnshelper not installed at all | `agent.list_service_providers` returns empty; the module runs the resolver-based check (5.4) end to end and shows correct copyable records; no create/overwrite actions are offered |
 | dnshelper installed after the module was already configured (order-of-install) | `service-dnshelper-changed` (or the module noticing it on next check) picks up the newly available zone without requiring the domain to be disabled and re-enabled |
 

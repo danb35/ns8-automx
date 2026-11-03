@@ -8,7 +8,6 @@
 STATUS_OK = "ok"
 STATUS_MISSING = "missing"
 STATUS_CONFLICT = "conflict"
-STATUS_UNMANAGED = "unmanaged"
 STATUS_NOT_PERMITTED = "not_permitted"
 STATUS_UNKNOWN = "unknown"
 

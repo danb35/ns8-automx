@@ -5,7 +5,9 @@
 # Computes the DNS status (DESIGN.md 5.2/5.3/5.4) for one domain's three
 # expected records, either through dnshelper (if present and covering the
 # zone) or through a resolver-based check (imageroot/bin/automx-dns-check,
-# run in an ephemeral automx-app container -- see VERIFY item 7).
+# run in an ephemeral automx-app container -- see VERIFY item 7). A zone
+# dnshelper doesn't manage gets the resolver check too: its records are
+# created by hand, and dns.routes_ready() needs to see when they are published.
 
 import json
 import os
@@ -20,21 +22,11 @@ def domain_dns_status(domain, target_fqdn, dnshelper_target):
     expected = dns.expected_records(domain, target_fqdn)
 
     if dnshelper_target is None:
-        return {
-            "managed": False,
-            "zone": None,
-            "allowed": None,
-            "records": _resolver_check(expected),
-        }
+        return _manual_status(expected)
 
     zone_info = dnshelperclient.has_zone(dnshelper_target, domain, dns.access_query(expected))
     if not zone_info["managed"]:
-        return {
-            "managed": False,
-            "zone": None,
-            "allowed": None,
-            "records": [{**r, "status": dns.STATUS_UNMANAGED} for r in _as_status_records(expected)],
-        }
+        return _manual_status(expected)
 
     if not zone_info["allowed"]:
         return {
@@ -80,6 +72,15 @@ def domain_dns_status(domain, target_fqdn, dnshelper_target):
         records.append(entry)
 
     return {"managed": True, "zone": zone, "allowed": True, "records": records}
+
+
+def _manual_status(expected):
+    return {
+        "managed": False,
+        "zone": None,
+        "allowed": None,
+        "records": _resolver_check(expected),
+    }
 
 
 def _as_status_records(expected):

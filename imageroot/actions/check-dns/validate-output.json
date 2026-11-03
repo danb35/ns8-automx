@@ -78,7 +78,6 @@
                                                 "ok",
                                                 "missing",
                                                 "conflict",
-                                                "unmanaged",
                                                 "not_permitted",
                                                 "unknown"
                                             ]
