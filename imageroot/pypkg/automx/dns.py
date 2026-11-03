@@ -26,8 +26,8 @@ def expected_records(domain, target_fqdn):
     writing target_fqdn bare through a real RFC 2136 (BIND) provider
     produced a CNAME literally pointing at
     "<target_fqdn>.<domain>." instead of "<target_fqdn>.", confirmed via
-    dig against the zone afterward. automx-dns-check's own resolver-based
-    comparison (5.4) already strips trailing dots on both sides before
+    dig against the zone afterward. automx-dns-check's own comparison
+    (5.4) already strips trailing dots on both sides before
     comparing, so it was never affected by this; only the create/
     overwrite path through dnshelper actually wrote wrong data."""
     target = target_fqdn.rstrip(".") + "."

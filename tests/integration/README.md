@@ -58,7 +58,7 @@ skipped and only the static/fallback behavior is checked. `TEST_ALIAS_MAIL` and 
 that delivers to exactly one user, and that user's login) are optional and cover alias resolution
 (DESIGN.md 2, v2). `DNSHELPER_MODULE_ID` (optional)
 points at an already-installed dnshelper instance covering `MAIL_DOMAIN`'s zone, to exercise the
-dnshelper-present DNS paths; without it, only the manual/resolver path (5.4) is checked.
+dnshelper-present DNS paths; without it, only the manual path (5.4) is checked.
 
 The Robot suite in `tests/` is the node's smoke test (`test-module.sh`); run it with the directory,
 not the file, so that `__init__.robot` opens the SSH connection:

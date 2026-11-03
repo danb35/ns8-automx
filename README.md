@@ -24,7 +24,7 @@ findings from testing it against real NS8 nodes.
 Every step of [DESIGN.md](DESIGN.md)'s design is implemented and has been exercised on
 real NS8 nodes, across six separate real-node passes: the core autoconfig/Autodiscover/
 mobileconfig path against both OpenLDAP (`rfc2307`) and Samba AD (`ad`) accounts
-providers; the manual (resolver-based) and dnshelper-backed DNS flows, including
+providers; the manual and dnshelper-backed DNS flows, including
 `not_permitted`, `conflict`, create, overwrite and the dnshelper-coverage-
 added-later ordering case; the alias-address fallback (aliases resolve to their owner's
 login since 0.2.0); the LDAP-unreachable fallback; Traefik
@@ -123,9 +123,9 @@ argument-less ones, since the admin UI sends no payload.
 | `get-configuration` | Settings plus a summary (enabled domain count, mail hostname, user domain, dnshelper presence) for the Status page, and the groupware modules that can provide CalDAV/CardDAV or ActiveSync. |
 | `get-domains` | The mail module's domains merged with the module's own enable/disable state: enabled flag, route status, DNS status per record, orphan flag. |
 | `set-domains` | Enable or disable one or more domains; applies Traefik routes, renders `automx.conf`, validates it, reloads the service. |
-| `check-dns` | Recompute DNS status for one domain (dnshelper path if it covers the zone, resolver path otherwise). |
+| `check-dns` | Recompute DNS status for one domain (through dnshelper if it covers the zone, otherwise by asking the zone's authoritative DNS servers). Also creates a domain's routes once its CNAME records are in place. |
 | `apply-dns` | For one domain: `create` (missing records) or `overwrite` (conflicting ones), each after a `dry_run` preview. dnshelper only. |
-| `get-dns-plan` | The exact records to create, for the manual (no-dnshelper) path. |
+| `get-dns-plan` | The exact records to create, for the manual path (no dnshelper, or a zone it doesn't manage). |
 | `get-dnshelper-status` | Whether dnshelper is present and, per domain, whether its zone is managed and whether this module is allowed to change it — what the UI needs to say exactly what's missing. |
 | `get-profile-link` | For one enabled domain: automx's own unauthenticated mobileconfig form URL and a ready-to-embed HTML snippet. No state change, no call to automx itself. |
 
@@ -167,7 +167,8 @@ argument-less ones, since the admin UI sends no payload.
 
 dnshelper is optional. If it isn't installed, or doesn't manage a domain's zone,
 `get-domains`/`check-dns` ask the zone's authoritative DNS servers instead (or the node's
-own resolver, if those can't be reached) and the UI shows what to create by hand. A domain's routes are created once its records resolve.
+own resolver, if those can't be reached) and the UI shows what to create by hand. A
+domain's routes are created once both of its CNAME records are in place.
 
 If it is installed, this module still starts out with **no access**: dnshelper denies
 every module everything until an administrator adds a rule for it. Add one on

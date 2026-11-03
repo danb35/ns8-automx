@@ -55,7 +55,7 @@ COPY --from=builder /opt/automx /opt/automx
 # they're code, not per-instance state:
 #  - automx-ldap-lookup: the script-backend lookup helper automx itself
 #    invokes as a subprocess.
-#  - automx-dns-check: the no-dnshelper DNS status check (5.4), invoked by
+#  - automx-dns-check: the check for records dnshelper doesn't cover (5.4), invoked by
 #    the host-side check-dns action via a one-off `podman run --rm`.
 COPY --chmod=0755 imageroot/bin/automx-ldap-lookup /usr/local/bin/automx-ldap-lookup
 COPY --chmod=0755 imageroot/bin/automx-dns-check /usr/local/bin/automx-dns-check
