@@ -166,8 +166,8 @@ argument-less ones, since the admin UI sends no payload.
 ## Using dnshelper
 
 dnshelper is optional. If it isn't installed, or doesn't manage a domain's zone,
-`get-domains`/`check-dns` resolve the records from a public DNS server instead and the UI
-shows what to create by hand. A domain's routes are created once its records resolve.
+`get-domains`/`check-dns` ask the zone's authoritative DNS servers instead (or the node's
+own resolver, if those can't be reached) and the UI shows what to create by hand. A domain's routes are created once its records resolve.
 
 If it is installed, this module still starts out with **no access**: dnshelper denies
 every module everything until an administrator adds a rule for it. Add one on
