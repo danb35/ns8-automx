@@ -185,7 +185,7 @@ class RoutesReadyTests(unittest.TestCase):
         )
 
     def test_not_ready_on_conflict_or_unknown(self):
-        for status in (dns.STATUS_CONFLICT, dns.STATUS_UNKNOWN, dns.STATUS_NOT_PERMITTED, dns.STATUS_UNMANAGED):
+        for status in (dns.STATUS_CONFLICT, dns.STATUS_UNKNOWN, dns.STATUS_NOT_PERMITTED):
             with self.subTest(status=status):
                 self.assertFalse(dns.routes_ready(self._status(dns.STATUS_OK, status)))
 

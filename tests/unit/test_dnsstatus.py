@@ -77,6 +77,35 @@ class ResolverCheckSubprocessTests(unittest.TestCase):
         self.assertEqual(result, script_output)
 
 
+class UnmanagedZoneTests(unittest.TestCase):
+    """dnshelper is installed but doesn't manage this domain's zone, so the
+    records are created by hand. They must still be looked up: dns.routes_ready()
+    only accepts "ok", and a status that never became "ok" kept the domain
+    waiting for DNS forever, with correct records published."""
+
+    def status(self, resolver_status):
+        records = [
+            {**r, "status": resolver_status}
+            for r in dnsstatus.dns.expected_records("example.com", "node.example.net")
+        ]
+        client = dnsstatus.dnshelperclient
+        zone_info = {"managed": False, "zone": None, "allowed": False}
+        with mock.patch.object(client, "has_zone", return_value=zone_info), mock.patch.object(
+            dnsstatus, "_resolver_check", return_value=records
+        ):
+            return dnsstatus.domain_dns_status("example.com", "node.example.net", "module/dnshelper1")
+
+    def test_published_records_are_ok_and_release_the_routes(self):
+        status = self.status(dnsstatus.dns.STATUS_OK)
+        self.assertFalse(status["managed"])
+        self.assertTrue(dnsstatus.dns.routes_ready(status))
+
+    def test_missing_records_keep_waiting(self):
+        status = self.status(dnsstatus.dns.STATUS_MISSING)
+        self.assertFalse(status["managed"])
+        self.assertFalse(dnsstatus.dns.routes_ready(status))
+
+
 class PerRecordAccessTests(unittest.TestCase):
     """A rule that names the zone but not every record (a user's node,
     2026-10-30: CNAME in all zones, SRV only in another zone). dnshelper's

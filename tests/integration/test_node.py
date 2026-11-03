@@ -298,7 +298,7 @@ class NodeIntegration(unittest.TestCase):
             self.assertIn(dns['managed'], (True, False))
         else:
             self.assertFalse(dns['managed'])
-            self.assertTrue(all(r['status'] in ('missing', 'unmanaged', 'unknown') for r in dns['records']))
+            self.assertTrue(all(r['status'] in ('missing', 'unknown') for r in dns['records']))
 
     def test_07_get_dns_plan_lists_the_three_records(self):
         cls = type(self)

@@ -25,7 +25,7 @@ Every step of [DESIGN.md](DESIGN.md)'s design is implemented and has been exerci
 real NS8 nodes, across six separate real-node passes: the core autoconfig/Autodiscover/
 mobileconfig path against both OpenLDAP (`rfc2307`) and Samba AD (`ad`) accounts
 providers; the manual (resolver-based) and dnshelper-backed DNS flows, including
-`not_permitted`, `conflict`, `unmanaged`, create, overwrite and the dnshelper-coverage-
+`not_permitted`, `conflict`, create, overwrite and the dnshelper-coverage-
 added-later ordering case; the alias-address fallback (aliases resolve to their owner's
 login since 0.2.0); the LDAP-unreachable fallback; Traefik
 route and certificate creation; disabling a domain; backup and restore into a new
@@ -165,8 +165,9 @@ argument-less ones, since the admin UI sends no payload.
 
 ## Using dnshelper
 
-dnshelper is optional. If it isn't installed, `get-domains`/`check-dns` resolve the
-records from a public DNS server instead and the UI shows what to create by hand.
+dnshelper is optional. If it isn't installed, or doesn't manage a domain's zone,
+`get-domains`/`check-dns` resolve the records from a public DNS server instead and the UI
+shows what to create by hand. A domain's routes are created once its records resolve.
 
 If it is installed, this module still starts out with **no access**: dnshelper denies
 every module everything until an administrator adds a rule for it. Add one on
