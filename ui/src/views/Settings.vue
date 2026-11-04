@@ -305,9 +305,13 @@ export default {
         this.isResolveAliasesEnabled = config.resolve_aliases;
         this.isSignProfilesEnabled = config.sign_profiles;
         this.signing = config.signing;
+        // The options must be in the DOM before the values are set: Vue applies
+        // a <select>'s value before patching its children, and the browser
+        // falls back to the first option if the value has no option yet.
+        this.groupware = config.groupware;
+        await this.$nextTick();
         this.davModule = config.dav_module || "";
         this.activesyncModule = config.activesync_module || "";
-        this.groupware = config.groupware;
       } catch (err) {
         this.error.getConfiguration = this.errorText(err);
       }
