@@ -1,4 +1,4 @@
-FROM node:26-bookworm
+FROM node:26.13.0-bookworm
 # Node 25 and later no longer bundle corepack: install it from npm when missing
 RUN (command -v corepack >/dev/null || npm install -g corepack) \
     && corepack enable \
