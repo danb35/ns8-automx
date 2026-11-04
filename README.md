@@ -12,8 +12,8 @@ SOGo or WebTop can be published along with mail.
 
 **Administering it?** The [user guide](docs/USER-GUIDE.md) explains enabling domains,
 publishing their DNS records (with or without dnshelper), settings, and sharing a
-download link with your users. This README is for people who build, test or work on the
-module itself.
+download link with your users. [TERMS.md](TERMS.md) says what data goes where. This README is
+for people who build, test or work on the module itself.
 
 See [DESIGN.md](DESIGN.md) for the full design, including the NS8 platform facts it
 depends on, why it uses automx's `script` LDAP backend instead of the native one, and the
@@ -72,6 +72,27 @@ Outlook with ActiveSync. See DESIGN.md section 2 for the details.
 
 Not in scope: PACC, Autodiscover v2, several mail instances at once. See DESIGN.md
 section 2 and 12.
+
+## Limitations
+
+- **automx 3 is still in beta upstream.** The image is built from a pinned tag (`AUTOMX_REF` in the
+  `Containerfile`).
+- **One mail instance.** automx serves the first mail module it finds, with that instance's one
+  user domain.
+- **One instance per node** (`org.nethserver.max-per-node=1`): every instance publishes the same
+  Autodiscover paths on the node's FQDN. The Software center and `add-module` refuse a second one
+  on a node, for an install, a clone or a restore. `add-module --force` skips the check for a test.
+- **Settings apply to all enabled domains.** Per-domain settings are planned for 0.3 (DESIGN.md 12).
+- **Nextcloud must be on automx's node**, since its host is read from a Traefik route.
+- **A shared alias can't be resolved**: an alias that delivers to several users, a group, a public
+  folder or an external address. Its users type their own login. New aliases take up to 15 minutes
+  to appear, since the mail module publishes no event when an address changes.
+- **No rate limiting.** automx has none of its own, and the module adds none at Traefik.
+- **Moving to another node is untested.** The code path is the one a clone uses, which is tested.
+- **Deleting the service host's certificate** does not stop signing until automx's next render,
+  because ns8-traefik publishes no event for it. The copy it holds is still a valid certificate.
+
+For how the data is handled, see [TERMS.md](TERMS.md).
 
 ## Install
 
@@ -218,13 +239,48 @@ a clone on the same node have been tested on a real node; a move to another node
 
 ## Admin UI
 
-Vue 2 with Carbon and `ns8-ui-lib`, in `ui/`. Four pages besides About: Status, Domains
+Vue 2 with Carbon and `ns8-ui-lib`, in `ui/`. Three pages besides About: Status, Domains
 (the DNS status dialog and the profile-link dialog live here), and Settings. See the
 [user guide](docs/USER-GUIDE.md) for what each one does.
 
 ```bash
 cd ui && yarn install && yarn build
 ```
+
+## Container, volumes and environment
+
+The module runs one rootless container, `automx`, from the `automx-app` image built by this
+repository. It publishes its port 8000 on the node's loopback only, runs as the module's own user
+with a read-only root filesystem and a tmpfs on `/tmp`, and is reached only through Traefik.
+
+It has no named volumes. These paths under the module's state directory are bind-mounted read-only:
+
+| Host path (`state/`) | In the container | Contents | Backed up |
+|---|---|---|---|
+| `automx.conf` | `/etc/automx/automx.conf` | Rendered configuration | No, regenerated on each start |
+| `ldap-lookup.json` | `/etc/automx/ldap-lookup.json` | Directory connection and bind password, mode 0600 | No, regenerated on each start |
+| `aliases/` | `/etc/automx/aliases` | Alias map | No, rebuilt by `automx-aliases.timer` |
+| `signing/` | `/etc/automx/signing` | Certificate and key, only when signing is on | No, read from Traefik again |
+
+`state/domains.json` and `state/settings.json` hold the module's own state and are the only files
+backed up. `state/environment` is the platform's own.
+
+The module sets no environment variables of its own. It reads these, which the platform provides:
+
+| Variable | Purpose |
+|---|---|
+| `TCP_PORT` | The node port allocated to the module (`org.nethserver.tcp-ports-demand=1`) |
+| `AUTOMX_APP_IMAGE` | The image to run, from the `org.nethserver.images` label |
+| `MODULE_ID`, `AGENT_INSTALL_DIR` | Used by the actions and scripts, as in any module |
+
+## Maintenance
+
+- **Don't edit `state/automx.conf` or `state/ldap-lookup.json`.** Both are rewritten each time the
+  service starts. Change the settings instead.
+- **Updating automx itself:** change `AUTOMX_REF` in the `Containerfile`. automx 3.0 needs Python
+  3.14, and `renovate.json` holds the Python image back to match.
+- **Logs:** the module's log in the admin UI, or `journalctl` on the node. automx's own access log
+  has only the method, path and status of each request.
 
 ## Development
 
@@ -266,13 +322,12 @@ rather than exercising the full enable-a-domain path, which needs the real infra
 English is the source language, in `ui/public/i18n/en/translation.json`. German, Spanish,
 French, Italian, Portuguese and Brazilian Portuguese (matching `ns8-dnshelper`'s target
 languages) were translated directly from it and have not been reviewed by native speakers.
-Basque (`eu`) still carries the ns8-kickstart template's placeholder text, same gap as
-dnshelper's own `eu` locale — not yet translated.
+Basque (`eu`) has only the ns8-kickstart template's strings, and the rest falls back to English.
 
-Not yet set up for this repository: [Weblate](https://hosted.weblate.org/projects/ns8/),
-for community translation and native-speaker review going forward.
+Translations are under the module's license, GPL-3.0-or-later. NethForge modules get a component in
+the [NS8 Weblate project](https://hosted.weblate.org/projects/ns8/), which is created by the
+NethForge maintainers during review.
 
-- add the [GitHub Weblate app](https://docs.weblate.org/en/latest/admin/continuous.html#github-setup)
-  to your repository
-- add your repository to [hosted.weblate.org](https://hosted.weblate.org) or ask a
-  NethServer developer to add it to the ns8 Weblate project
+## Author
+
+[Dan Brown](https://community.nethserver.org/u/dan)

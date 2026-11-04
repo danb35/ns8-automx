@@ -7,6 +7,9 @@ manage those records for you (optional), and how to share a download link with y
 users. Developers who want to know how it's built, or how it uses dnshelper and the mail
 module, should read the [main README](../README.md) instead.
 
+For what data goes where, including what anyone on the internet can look up, see
+[Data and privacy](../TERMS.md).
+
 - [What automx does](#what-automx-does)
 - [Before you start](#before-you-start)
 - [Enabling a domain](#enabling-a-domain)

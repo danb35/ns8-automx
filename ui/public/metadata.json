@@ -16,9 +16,11 @@
     }
   ],
   "docs": {
+    "terms_url": "https://github.com/danb35/ns8-automx/blob/master/TERMS.md",
     "documentation_url": "https://github.com/danb35/ns8-automx/blob/master/docs/USER-GUIDE.md",
     "bug_url": "https://github.com/danb35/ns8-automx/issues",
-    "code_url": "https://github.com/danb35/ns8-automx"
+    "code_url": "https://github.com/danb35/ns8-automx",
+    "relnotes_url": "https://github.com/danb35/ns8-automx/releases"
   },
   "source": "ghcr.io/danb35/automx"
 }
