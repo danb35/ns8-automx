@@ -1,5 +1,6 @@
 //
-// Copyright (C) 2023 Nethesis S.r.l.
+// Copyright (C) 2023 Nethesis S.r.l. (ns8-kickstart template)
+// Copyright (C) 2026 Dan Brown
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 import Vue from "vue";

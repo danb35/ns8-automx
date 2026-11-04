@@ -17,9 +17,8 @@
 # module's own host UID/GID, so it can read the state/ files above -- which
 # include a 0600 LDAP bind password -- directly as their owner, instead of
 # the image's built-in non-root user (which a plain rootless run would remap
-# to an unrelated subordinate UID with no access to them). DESIGN.md 4.1
-# flags this as needing confirmation against a real node; do that before
-# considering this unit done (see DESIGN.md 9.2).
+# to an unrelated subordinate UID with no access to them). Confirmed on real
+# nodes (DESIGN.md 4.1).
 #
 
 [Unit]
