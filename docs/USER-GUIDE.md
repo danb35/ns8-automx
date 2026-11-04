@@ -67,7 +67,7 @@ them for you, after you review and confirm each change. See
 Open **Domains**. It lists every mail domain the mail module knows about. New domains
 start **disabled** — nothing is published for a domain until you turn it on.
 
-![The Domains page](images/domains.jpg)
+![The Domains page](images/domains.png)
 
 Turning a domain on:
 
@@ -115,6 +115,8 @@ Each enabled domain needs three DNS records to work everywhere:
 Open the row's overflow menu (⋮) and choose **DNS status**. What you see there depends
 on whether dnshelper is installed and covers the domain's zone. Either way, the dialog
 lists the three records with each one's current status — *OK*, *Missing*, *Conflict*.
+
+![The DNS status dialog, listing the three records and their status](images/dns-status.png)
 
 **Without dnshelper**, or if dnshelper doesn't manage this particular zone, you get an
 info banner saying so, and the Domains page shows a **Manual** tag beside the domain's DNS
@@ -181,7 +183,7 @@ a CNAME needs to go (for example, deleting a stray A record at `autoconfig.<doma
 before adding the CNAME), the rule additionally needs to allow that conflicting type at
 the same names — add it (`A`, in that example) or set **Record types** to `*`.
 
-![The rule for automx1 on dnshelper's Access page, once added](images/dnshelper-access.jpg)
+![The rule for automx on dnshelper's Access page, once added](images/dnshelper-access.png)
 
 **3. That's it** — no further step is needed on automx's side. Its Domains page rechecks
 dnshelper's coverage and your access rule live, every time you open the DNS status
@@ -196,7 +198,7 @@ either way, since removing dnshelper's access doesn't touch anything already pub
 
 Open **Settings**.
 
-![The Settings page](images/settings.jpg)
+![The Settings page](images/settings.png)
 
 - **Service host (FQDN)** — the name the CNAME and SRV records point at, and the host
   Outlook's Autodiscover route is published on. Leave it blank to use this node's own
@@ -229,6 +231,8 @@ Open **Settings**.
   on places that certificate's private key inside the automx container.
 
 ### Calendars, contacts and ActiveSync
+
+![The calendar, contacts and ActiveSync settings](images/settings-groupware.png)
 
 If Nextcloud, SOGo or WebTop is installed, automx can also hand out its calendar and
 contacts (CalDAV/CardDAV) or ActiveSync settings, so clients set those up along with
@@ -265,7 +269,7 @@ users however you already reach them (an intranet page, a wiki, a welcome email)
 Both are a thin wrapper around the same already-public, unauthenticated URL — they add
 no authentication of their own, just convenience.
 
-![The profile link dialog, with the direct link and the embeddable form](images/profile-link.jpg)
+![The profile link dialog, with the direct link and the embeddable form](images/profile-link.png)
 
 ## Checking on things: the Status page
 
@@ -274,7 +278,7 @@ server and user domain currently in use, whether dnshelper is present, the autom
 service's own health, your backup status, and a card that opens this module's system
 logs.
 
-![The Status page](images/status.jpg)
+![The Status page](images/status.png)
 
 If a domain looks wrong, start here: the service cards show whether the automx
 service is actually running, which is the first thing to check if enabling a domain
