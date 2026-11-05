@@ -100,8 +100,7 @@ For how the data is handled, see [TERMS.md](TERMS.md).
 
 automx is published in the software repository at
 [danb35.github.io/ns8-repomd](https://danb35.github.io/ns8-repomd/) (source:
-[danb35/ns8-repomd](https://github.com/danb35/ns8-repomd)), which also carries
-[dnshelper](https://github.com/danb35/ns8-dnshelper). Add it to the cluster once:
+[danb35/ns8-repomd](https://github.com/danb35/ns8-repomd)). Add it to the cluster once:
 
 1. In the cluster admin UI, open **Settings → Software repositories** and click **Add repository**.
 2. Enter a name (for example `danb35`) and the URL `https://danb35.github.io/ns8-repomd/`, leave
@@ -115,6 +114,10 @@ Or add the repository from a shell on the leader node:
 
 With the repository added, new releases are offered as updates in the Software center like any
 other app. They are usually listed within a few minutes of being published.
+
+The optional [dnshelper](https://github.com/danb35/ns8-dnshelper) has moved to NethForge and is no
+longer in this repository. To install it, enable the `nethforge` repository on the same page: every
+cluster already has it, disabled by default.
 
 ### From the command line
 
