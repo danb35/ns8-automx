@@ -167,6 +167,15 @@ class NodeIntegration(unittest.TestCase):
         # mail@any:mailadm grant and the get-configuration call work.
         self.assertIsNotNone(config['mail_hostname'])
         self.assertEqual(config['dnshelper_present'], bool(DNSHELPER_MODULE_ID))
+        # The mail server choices, and a binding that survives a save.
+        self.assertIn(config['mail_server'], [s['module_uuid'] for s in config['mail_servers']])
+        rc, _ = api(cls.automx, 'configure-module', {'mail_server': config['mail_server']})
+        self.assertEqual(rc, 0)
+        rc, again = api(cls.automx, 'get-configuration', {})
+        self.assertEqual(rc, 0)
+        self.assertEqual(again['mail_server'], config['mail_server'])
+        rc, _ = api(cls.automx, 'configure-module', {'mail_server': '11111111-2222-3333-4444-555555555555'})
+        self.assertNotEqual(rc, 0)
 
     def test_02_get_domains_reflects_the_real_mail_module(self):
         rc, out = api(type(self).automx, 'get-domains', {})

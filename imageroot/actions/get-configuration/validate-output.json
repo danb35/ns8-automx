@@ -9,6 +9,8 @@
         "http2https",
         "display_names",
         "enabled_domain_count",
+        "mail_server",
+        "mail_servers",
         "mail_hostname",
         "user_domain",
         "dnshelper_present",
@@ -36,6 +38,65 @@
         "enabled_domain_count": {
             "type": "integer",
             "minimum": 0
+        },
+        "mail_server": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "MODULE_UUID of the mail module in use: the stored binding, even if that module is gone, else the one used by default. null without either."
+        },
+        "mail_servers": {
+            "type": "array",
+            "description": "The mail modules of the cluster, nearest first.",
+            "items": {
+                "type": "object",
+                "required": [
+                    "module_uuid",
+                    "module_id",
+                    "ui_name",
+                    "hostname",
+                    "user_domain",
+                    "node",
+                    "used_by",
+                    "groupware"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                    "module_uuid": {
+                        "type": "string"
+                    },
+                    "module_id": {
+                        "type": "string"
+                    },
+                    "ui_name": {
+                        "type": "string"
+                    },
+                    "hostname": {
+                        "type": "string"
+                    },
+                    "user_domain": {
+                        "type": "string"
+                    },
+                    "node": {
+                        "type": "string"
+                    },
+                    "used_by": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Another automx instance bound to this mail module, if any."
+                    },
+                    "groupware": {
+                        "type": "array",
+                        "description": "Groupware modules usable with this mail module; same items as the top-level groupware.",
+                        "items": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
         },
         "mail_hostname": {
             "type": [

@@ -23,6 +23,35 @@
       <cv-column>
         <NsTile light>
           <cv-form @submit.prevent="configureModule">
+            <NsInlineNotification
+              v-if="mailServerMissing"
+              kind="warning"
+              :title="$t('settings.mail_server_missing_title')"
+              :description="$t('settings.mail_server_missing_description')"
+              :showCloseButton="false"
+              class="mg-bottom maxwidth"
+            />
+            <cv-select
+              :label="$t('settings.mail_server')"
+              :helper-text="$t('settings.mail_server_help')"
+              v-model="mailServer"
+              :disabled="stillLoading || !mailServers.length"
+              :invalid-message="
+                fieldError(error.configureModule, 'mail_server')
+              "
+              class="mg-bottom maxwidth"
+            >
+              <cv-select-option v-if="!mailServer" value="" disabled hidden>{{
+                $t("settings.mail_server_choose")
+              }}</cv-select-option>
+              <cv-select-option
+                v-for="s in mailServers"
+                :key="s.module_uuid"
+                :value="s.module_uuid"
+                :disabled="s.used_by && s.module_uuid !== savedMailServer"
+                >{{ mailServerLabel(s) }}</cv-select-option
+              >
+            </cv-select>
             <NsTextInput
               :label="$t('settings.service_host')"
               :helper-text="$t('settings.service_host_help')"
@@ -221,7 +250,9 @@ export default {
       signing: null,
       davModule: "",
       activesyncModule: "",
-      groupware: [],
+      mailServer: "",
+      savedMailServer: "",
+      mailServers: [],
       loading: {
         getConfiguration: false,
         configureModule: false,
@@ -268,11 +299,40 @@ export default {
         description: this.$t("settings.signing_ok_description", { host }),
       };
     },
+    selectedMailServer() {
+      return this.mailServers.find((s) => s.module_uuid === this.mailServer);
+    },
+    mailServerMissing() {
+      return (
+        !this.loading.getConfiguration &&
+        this.savedMailServer &&
+        !this.mailServers.some((s) => s.module_uuid === this.savedMailServer)
+      );
+    },
+    groupware() {
+      return this.selectedMailServer ? this.selectedMailServer.groupware : [];
+    },
     davProviders() {
       return this.groupware.filter((g) => g.dav_url);
     },
     activesyncProviders() {
       return this.groupware.filter((g) => g.activesync_url);
+    },
+  },
+  watch: {
+    // Another mail server has its own groupware choices: a provider it
+    // doesn't offer must not stay selected.
+    mailServer() {
+      if (!this.davProviders.some((g) => g.module_id === this.davModule)) {
+        this.davModule = "";
+      }
+      if (
+        !this.activesyncProviders.some(
+          (g) => g.module_id === this.activesyncModule
+        )
+      ) {
+        this.activesyncModule = "";
+      }
     },
   },
   created() {
@@ -289,6 +349,16 @@ export default {
     next();
   },
   methods: {
+    mailServerLabel(s) {
+      const name = s.ui_name ? `${s.ui_name} (${s.module_id})` : s.module_id;
+      const label = s.hostname ? `${name}, ${s.hostname}` : name;
+      return s.used_by && s.module_uuid !== this.savedMailServer
+        ? this.$t("settings.mail_server_used_by", {
+            server: label,
+            module: s.used_by,
+          })
+        : label;
+    },
     groupwareLabel(g) {
       return `${this.$t("settings.kind_" + g.kind)} (${g.module_id}, ${
         g.host
@@ -307,8 +377,16 @@ export default {
         this.signing = config.signing;
         // The options must be in the DOM before the values are set: Vue applies
         // a <select>'s value before patching its children, and the browser
-        // falls back to the first option if the value has no option yet.
-        this.groupware = config.groupware;
+        // falls back to the first option if the value has no option yet. The
+        // groupware options depend on the mail server, hence the two steps.
+        this.savedMailServer = config.mail_server || "";
+        this.mailServers = config.mail_servers;
+        await this.$nextTick();
+        this.mailServer = config.mail_servers.some(
+          (s) => s.module_uuid === config.mail_server
+        )
+          ? config.mail_server
+          : "";
         await this.$nextTick();
         this.davModule = config.dav_module || "";
         this.activesyncModule = config.activesync_module || "";
@@ -323,6 +401,7 @@ export default {
       try {
         await this.callAction("configure-module", {
           data: {
+            ...(this.mailServer ? { mail_server: this.mailServer } : {}),
             service_host: this.serviceHost || null,
             http2https: this.isHttpToHttpsEnabled,
             display_names: this.isDisplayNamesEnabled,

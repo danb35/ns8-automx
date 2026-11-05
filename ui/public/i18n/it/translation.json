@@ -94,6 +94,12 @@
     "title": "Impostazioni",
     "configure_instance": "Configura {instance}",
     "save": "Salva",
+    "mail_server": "Server di posta",
+    "mail_server_help": "Il server di posta per i cui domini questa istanza configura i client. Se lo cambi, i domini presenti solo sul precedente non vengono più serviti e risultano orfani nella pagina Domini.",
+    "mail_server_choose": "Scegli un server di posta",
+    "mail_server_used_by": "{server}: usato da {module}",
+    "mail_server_missing_title": "Server di posta non trovato",
+    "mail_server_missing_description": "Il server di posta a cui è associata questa istanza non è più nel cluster, quindi non viene servito nulla. Scegline un altro e salva.",
     "service_host": "Host del servizio (FQDN)",
     "service_host_help": "Destinazione CNAME/SRV e host Autodiscover. Lascia vuoto per usare il FQDN proprio di questo nodo.",
     "http_to_https": "Reindirizza HTTP a HTTPS",
@@ -182,6 +188,8 @@
     "unsupported": "Non supportato da questo provider DNS",
     "invalid_request": "Richiesta non valida",
     "unknown_provider": "Provider DNS sconosciuto",
-    "groupware_not_available": "Questa applicazione non fornisce questo servizio per il server di posta."
+    "groupware_not_available": "Questa applicazione non fornisce questo servizio per il server di posta.",
+    "mail_server_not_found": "Quel server di posta non è nel cluster o non è ancora configurato.",
+    "mail_server_in_use": "Un'altra istanza di automx usa già quel server di posta. Due istanze sullo stesso server di posta sovrascriverebbero a vicenda i propri record DNS."
   }
 }

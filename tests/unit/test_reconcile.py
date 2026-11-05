@@ -156,6 +156,20 @@ class ReconcileDnsGateTests(unittest.TestCase):
         self.mocks[f"{module_name}.{attr}"] = m
         return m
 
+    def test_a_usable_domain_records_the_mail_server_in_use(self):
+        self._patch("routes", "domain_route_exists", return_value=True)
+        ensure_bound = self._patch("mail", "ensure_bound")
+        reconcile.reconcile_locked(None)
+        ensure_bound.assert_called_once()
+
+    def test_no_usable_domain_records_nothing(self):
+        # E.g. the default mail server changed and has none of the enabled
+        # domains: the administrator chooses, this must not settle it.
+        self.mocks["mail.get_instance_info"].return_value = ("mail2", "mail.other", "other", {"other.example"})
+        ensure_bound = self._patch("mail", "ensure_bound")
+        reconcile.reconcile_locked(None)
+        ensure_bound.assert_not_called()
+
     def test_domain_without_a_route_and_dns_not_ready_is_skipped_and_reported(self):
         self._patch("routes", "domain_route_exists", return_value=False)
         self._patch(

@@ -113,6 +113,12 @@ def reconcile_locked(rdb):
 
     enabled_domains = domains.enabled_usable(mail_domain_names, domains_state)
 
+    # Serving a domain settles which mail module this instance belongs to
+    # (DESIGN.md decision #15). No domain usable means nothing to keep, and
+    # the administrator may be about to choose.
+    if enabled_domains:
+        mail.ensure_bound(rdb)
+
     # Neither is needed at all with zero enabled domains -- get_node_fqdn()
     # is its own NS8 task RPC, not worth paying for on every reconcile of
     # an unused instance.

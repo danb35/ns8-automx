@@ -31,12 +31,19 @@ def signing_status():
 
 rdb = agent.redis_connect(use_replica=True)
 try:
-    mail_module_id, mail_hostname, user_domain_name, _domain_names = mail.get_instance_info(rdb)
-    candidates = groupware.list_candidates(rdb, mail_module_id, user_domain_name)
+    _module_id, mail_hostname, user_domain_name, _domain_names = mail.get_instance_info(rdb)
 except (mail.MailNotFound, mail.MailNotConfigured):
     mail_hostname = None
     user_domain_name = None
-    candidates = []
+
+# Groupware per mail module, so the page can update its choices as soon as
+# another mail module is picked. Only Nextcloud costs a task (groupware.py).
+mail_servers = [
+    {**server, "groupware": groupware.list_candidates(rdb, server["module_id"], server["user_domain"])}
+    for server in mail.list_servers(rdb)
+]
+mail_server = mail.current_uuid(rdb)
+candidates = next((s["groupware"] for s in mail_servers if s["module_uuid"] == mail_server), [])
 
 json.dump(
     {
@@ -50,6 +57,8 @@ json.dump(
         "activesync_module": settings["activesync_module"],
         "groupware": candidates,
         "enabled_domain_count": sum(1 for flags in domains.values() if flags.get("enabled")),
+        "mail_server": mail_server,
+        "mail_servers": mail_servers,
         "mail_hostname": mail_hostname,
         "user_domain": user_domain_name,
         "dnshelper_present": dnshelperclient.find_instance() is not None,

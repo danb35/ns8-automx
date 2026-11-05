@@ -2,9 +2,10 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Configure automx",
     "$id": "http://nethserver.org/json-schema/task/input/automx/configure-module",
-    "description": "Settings for automx (DESIGN.md 6.1/7): service host override, http2https default, display-names toggle, and the groupware modules whose CalDAV/CardDAV and ActiveSync endpoints are published. All optional; an omitted field keeps its current value. Accepts null or {} so the admin UI can call it with no payload just to (re)apply current settings.",
+    "description": "Settings for automx (DESIGN.md 6.1/7): the mail server, service host override, http2https default, display-names toggle, and the groupware modules whose CalDAV/CardDAV and ActiveSync endpoints are published. All optional; an omitted field keeps its current value. Accepts null or {} so the admin UI can call it with no payload just to (re)apply current settings.",
     "examples": [
         {
+            "mail_server": "11111111-2222-3333-4444-555555555555",
             "service_host": null,
             "http2https": true,
             "display_names": true,
@@ -20,6 +21,12 @@
     ],
     "additionalProperties": false,
     "properties": {
+        "mail_server": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Mail server",
+            "description": "MODULE_UUID of the mail module this instance serves, from get-configuration's mail_servers. Omit to keep the current one."
+        },
         "service_host": {
             "type": [
                 "string",

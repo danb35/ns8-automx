@@ -33,6 +33,14 @@ Check if automx configuration reads back
     Should Be Equal    ${config}[mail_hostname]    ${None}
     Should Be Equal    ${config}[dav_module]    ${None}
     Should Be Equal    ${config}[groupware]    ${{ [] }}
+    Should Be Equal    ${config}[mail_server]    ${None}
+    Should Be Equal    ${config}[mail_servers]    ${{ [] }}
+
+Check if configure-module rejects an unknown mail server
+    ${rc} =    Execute Command
+    ...    api-cli run module/${module_id}/configure-module --data '{"mail_server":"11111111-2222-3333-4444-555555555555"}'
+    ...    return_rc=True  return_stdout=False
+    Should Not Be Equal As Integers    ${rc}  0
 
 Check if configure-module rejects an unavailable groupware module
     ${rc} =    Execute Command

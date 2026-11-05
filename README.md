@@ -77,8 +77,12 @@ section 2 and 12.
 
 - **automx 3 is still in beta upstream.** The image is built from a pinned tag (`AUTOMX_REF` in the
   `Containerfile`).
-- **One mail instance.** automx serves the first mail module it finds, with that instance's one
-  user domain.
+- **One mail server per instance.** An instance serves one mail module, with its one user domain,
+  chosen in Settings and stored by its UUID (`MAIL_SERVER`), so it survives a move or restore of
+  that module. With nothing chosen, automx uses the nearest mail module and records it once a domain
+  is enabled. A cluster with several mail servers needs one automx per mail server, each on its own
+  node. Settings refuses a mail server another instance uses, since both would write the same DNS
+  records; a clone or a restore alongside the original keeps the same binding, so change one of them.
 - **One instance per node** (`org.nethserver.max-per-node=1`): every instance publishes the same
   Autodiscover paths on the node's FQDN. The Software center and `add-module` refuse a second one
   on a node, for an install, a clone or a restore. `add-module --force` skips the check for a test.

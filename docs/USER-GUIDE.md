@@ -44,7 +44,7 @@ The pages of the application, in the side menu:
 |---|---|
 | **Status** | How many domains are enabled, which mail server and user domain are in use, whether dnshelper is present, service health, backup status and a shortcut to the logs |
 | **Domains** | Turn autoconfiguration on or off per mail domain, see its DNS and route status, publish DNS records, get a profile download link |
-| **Settings** | The service host name, whether HTTP redirects to HTTPS, display names, alias resolution, profile signing, and the calendar, contacts and ActiveSync providers |
+| **Settings** | The mail server, the service host name, whether HTTP redirects to HTTPS, display names, alias resolution, profile signing, and the calendar, contacts and ActiveSync providers |
 | **About** | Version and links |
 
 Nothing here requires you to touch DNS or the mail server directly: automx reads your
@@ -200,6 +200,12 @@ Open **Settings**.
 
 ![The Settings page](images/settings.png)
 
+- **Mail server** — the mail server whose domains this automx instance configures clients
+  for. With one mail server on the cluster there is nothing to decide. With several, each
+  automx serves one, and a mail server another automx already uses is shown as unavailable.
+  If you change it, domains only the previous mail server has stop being served and show as
+  orphaned on the Domains page, and any calendar or ActiveSync provider the new one doesn't
+  offer is reset to None. DNS records are left as they are.
 - **Service host (FQDN)** — the name the CNAME and SRV records point at, and the host
   Outlook's Autodiscover route is published on. Leave it blank to use this node's own
   name, which is right for almost everyone; only set it if you want autoconfiguration to
@@ -308,6 +314,7 @@ missing, the same as it would for a domain enabled for the first time.
 | **dnshelper has no access rule for this zone** | dnshelper knows the zone, but this automx instance hasn't been given a rule for it yet. Add the rule shown in the dialog — see [Optional: managing DNS through dnshelper](#optional-managing-dns-through-dnshelper) |
 | A DNS record shows **Conflict** | Something else already exists at that name with a different value (or a different record type). Use **Overwrite conflicting records** if dnshelper manages the zone, after reviewing the preview, or fix it at your DNS provider directly otherwise |
 | A client shows the person's raw email address instead of their name | Either **Include display names** is off in Settings, or the address the client asked about is a mail *alias* that automx can't resolve: one shared by several people, one added in the last 15 minutes, or any alias while **Resolve mail aliases** is off. The client then falls back to a generic answer and the person enters their own username |
+| Settings says **Mail server not found** | The mail server this automx is bound to is no longer on the cluster, so nothing is being served. Choose another one in Settings and save. |
 | A domain is greyed out and marked **Orphaned** | The mail domain it was for no longer exists on the mail module. Nothing is being served for it; remove it from the mail module for good if it's not coming back |
 | The service on the Status page shows as not running | Check the service logs from the Status page's Logs card. A validation failure in the rendered configuration (for example, the accounts provider being briefly unreachable) leaves the *previous* working configuration in place rather than taking the service down, so this usually means something more fundamental — the mail module or the accounts provider being absent entirely |
 

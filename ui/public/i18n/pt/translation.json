@@ -94,6 +94,12 @@
     "title": "Definições",
     "configure_instance": "Configurar {instance}",
     "save": "Guardar",
+    "mail_server": "Servidor de correio",
+    "mail_server_help": "O servidor de correio para cujos domínios esta instância configura os clientes. Se o alterar, os domínios que só o anterior tem deixam de ser servidos e aparecem como órfãos na página Domínios.",
+    "mail_server_choose": "Escolha um servidor de correio",
+    "mail_server_used_by": "{server}: usado por {module}",
+    "mail_server_missing_title": "Servidor de correio não encontrado",
+    "mail_server_missing_description": "O servidor de correio a que esta instância está associada já não está no cluster, pelo que nada está a ser servido. Escolha outro e guarde.",
     "service_host": "Anfitrião do serviço (FQDN)",
     "service_host_help": "Destino CNAME/SRV e anfitrião do Autodiscover. Deixe em branco para usar o FQDN próprio deste nó.",
     "http_to_https": "Redirecionar HTTP para HTTPS",
@@ -182,6 +188,8 @@
     "unsupported": "Não suportado por este fornecedor de DNS",
     "invalid_request": "Pedido inválido",
     "unknown_provider": "Fornecedor de DNS desconhecido",
-    "groupware_not_available": "Essa aplicação não fornece este serviço para o servidor de correio."
+    "groupware_not_available": "Essa aplicação não fornece este serviço para o servidor de correio.",
+    "mail_server_not_found": "Esse servidor de correio não está no cluster ou ainda não está configurado.",
+    "mail_server_in_use": "Outra instância do automx já usa esse servidor de correio. Duas instâncias no mesmo servidor de correio substituiriam os registos DNS uma da outra."
   }
 }
