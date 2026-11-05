@@ -94,6 +94,12 @@
     "title": "Configurações",
     "configure_instance": "Configurar {instance}",
     "save": "Salvar",
+    "mail_server": "Servidor de e-mail",
+    "mail_server_help": "O servidor de e-mail para cujos domínios esta instância configura os clientes. Se você o alterar, os domínios que só o anterior tem deixam de ser atendidos e aparecem como órfãos na página Domínios.",
+    "mail_server_choose": "Escolha um servidor de e-mail",
+    "mail_server_used_by": "{server}: usado por {module}",
+    "mail_server_missing_title": "Servidor de e-mail não encontrado",
+    "mail_server_missing_description": "O servidor de e-mail ao qual esta instância está vinculada não está mais no cluster, portanto nada está sendo atendido. Escolha outro e salve.",
     "service_host": "Host do serviço (FQDN)",
     "service_host_help": "Destino do CNAME/SRV e host do Autodiscover. Deixe em branco para usar o FQDN próprio deste nó.",
     "http_to_https": "Redirecionar HTTP para HTTPS",
@@ -182,6 +188,8 @@
     "unsupported": "Não suportado por este provedor de DNS",
     "invalid_request": "Solicitação inválida",
     "unknown_provider": "Provedor de DNS desconhecido",
-    "groupware_not_available": "Esse aplicativo não fornece este serviço para o servidor de e-mail."
+    "groupware_not_available": "Esse aplicativo não fornece este serviço para o servidor de e-mail.",
+    "mail_server_not_found": "Esse servidor de e-mail não está no cluster ou ainda não foi configurado.",
+    "mail_server_in_use": "Outra instância do automx já usa esse servidor de e-mail. Duas instâncias no mesmo servidor de e-mail sobrescreveriam os registros DNS uma da outra."
   }
 }

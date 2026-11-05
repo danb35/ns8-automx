@@ -11,21 +11,43 @@ import sys
 sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
 
 import agent
-from automx import groupware, mail, state
+from automx import groupware, mail, reconcile, routes, state
 
 data = json.load(sys.stdin) or {}
 
 settings = state.load_settings()
 settings.update({k: v for k, v in data.items() if k in state.DEFAULT_SETTINGS})
 
+rdb = None
+requested_mail = data.get("mail_server")
+previous_mail = None
+new_mail_domains = None
+if requested_mail and requested_mail != mail.bound_uuid():
+    rdb = agent.redis_connect(use_replica=True)
+    previous_mail = mail.current_uuid(rdb)
+    error = None
+    try:
+        _id, _hostname, _user_domain, new_mail_domains = mail.get_instance_info(rdb, requested_mail)
+        if requested_mail in mail.users_of(rdb):
+            error = "mail_server_in_use"
+    except (mail.MailNotFound, mail.MailNotConfigured):
+        error = "mail_server_not_found"
+    if error:
+        agent.set_status("validation-failed")
+        json.dump(
+            [{"field": "mail_server", "parameter": "mail_server", "value": requested_mail, "error": error}],
+            fp=sys.stdout,
+        )
+        sys.exit(3)
+
 # A chosen groupware module must actually provide that service for this
 # mail instance (DESIGN.md 2, v2 scope). Checked only when a module is set,
 # so saving the other settings needs no discovery at all.
 chosen = {"dav_url": data.get("dav_module"), "activesync_url": data.get("activesync_module")}
 if any(chosen.values()):
-    rdb = agent.redis_connect(use_replica=True)
+    rdb = rdb or agent.redis_connect(use_replica=True)
     try:
-        mail_module_id, _hostname, user_domain, _domains = mail.get_instance_info(rdb)
+        mail_module_id, _hostname, user_domain, _domains = mail.get_instance_info(rdb, requested_mail)
         candidates = groupware.list_candidates(rdb, mail_module_id, user_domain)
     except (mail.MailNotFound, mail.MailNotConfigured):
         candidates = []
@@ -40,3 +62,15 @@ if any(chosen.values()):
         sys.exit(3)
 
 state.save_settings(settings)
+
+if new_mail_domains is not None:
+    with reconcile.lock():
+        mail.bind(requested_mail)
+        # Domains only the previous mail module has are no longer served.
+        # Their flags stay, reported as orphaned; their routes would only
+        # keep renewing certificates. Done here and not in reconcile(), which
+        # must never remove a route because the mail module is briefly away.
+        if previous_mail and previous_mail != requested_mail:
+            for domain, flags in state.load_domains().items():
+                if flags.get("enabled") and domain not in new_mail_domains:
+                    routes.delete_domain_routes(os.environ["MODULE_ID"], domain)

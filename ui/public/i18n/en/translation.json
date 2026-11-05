@@ -94,6 +94,12 @@
     "title": "Settings",
     "configure_instance": "Configure {instance}",
     "save": "Save",
+    "mail_server": "Mail server",
+    "mail_server_help": "The mail server whose domains this instance configures clients for. If you change it, domains only the previous one has stop being served and show as orphaned on the Domains page.",
+    "mail_server_choose": "Choose a mail server",
+    "mail_server_used_by": "{server}: used by {module}",
+    "mail_server_missing_title": "Mail server not found",
+    "mail_server_missing_description": "The mail server this instance is bound to is no longer on the cluster, so nothing is being served. Choose another one and save.",
     "service_host": "Service host (FQDN)",
     "service_host_help": "CNAME/SRV target and Autodiscover host. Leave blank to use this node's own FQDN.",
     "http_to_https": "Redirect HTTP to HTTPS",
@@ -182,6 +188,8 @@
     "unsupported": "Not supported by this DNS provider",
     "invalid_request": "Invalid request",
     "unknown_provider": "Unknown DNS provider",
-    "groupware_not_available": "That app does not provide this service for the mail server."
+    "groupware_not_available": "That app does not provide this service for the mail server.",
+    "mail_server_not_found": "That mail server is not on the cluster, or is not configured yet.",
+    "mail_server_in_use": "Another automx instance already uses that mail server. Two instances on one mail server would overwrite each other's DNS records."
   }
 }

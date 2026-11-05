@@ -94,6 +94,12 @@
     "title": "Einstellungen",
     "configure_instance": "{instance} konfigurieren",
     "save": "Speichern",
+    "mail_server": "Mailserver",
+    "mail_server_help": "Der Mailserver, für dessen Domains diese Instanz Clients konfiguriert. Wenn Sie ihn ändern, werden Domains, die nur der bisherige hat, nicht mehr bedient und auf der Seite Domains als verwaist angezeigt.",
+    "mail_server_choose": "Mailserver auswählen",
+    "mail_server_used_by": "{server}: verwendet von {module}",
+    "mail_server_missing_title": "Mailserver nicht gefunden",
+    "mail_server_missing_description": "Der Mailserver, an den diese Instanz gebunden ist, ist nicht mehr im Cluster, daher wird nichts bedient. Wählen Sie einen anderen aus und speichern Sie.",
     "service_host": "Dienst-Host (FQDN)",
     "service_host_help": "CNAME-/SRV-Ziel und Autodiscover-Host. Leer lassen, um den eigenen FQDN dieses Knotens zu verwenden.",
     "http_to_https": "HTTP zu HTTPS umleiten",
@@ -182,6 +188,8 @@
     "unsupported": "Von diesem DNS-Anbieter nicht unterstützt",
     "invalid_request": "Ungültige Anfrage",
     "unknown_provider": "Unbekannter DNS-Anbieter",
-    "groupware_not_available": "Diese App stellt diesen Dienst für den Mailserver nicht bereit."
+    "groupware_not_available": "Diese App stellt diesen Dienst für den Mailserver nicht bereit.",
+    "mail_server_not_found": "Dieser Mailserver ist nicht im Cluster oder noch nicht konfiguriert.",
+    "mail_server_in_use": "Eine andere automx-Instanz verwendet diesen Mailserver bereits. Zwei Instanzen auf einem Mailserver würden gegenseitig ihre DNS-Einträge überschreiben."
   }
 }

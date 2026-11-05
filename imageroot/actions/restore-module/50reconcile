@@ -4,10 +4,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # state/domains.json and state/settings.json are restored directly by the
-# inherited 10restore (Restic) step, as plain files -- unlike the
-# ns8-kickstart template this module started from, there's no TRAEFIK_HOST-
-# style env var to copy back via agent.set_env() (DESIGN.md 4.2: settings
-# live in state files, not the environment) and no database dump to load.
+# inherited 10restore (Restic) step, as plain files (DESIGN.md 4.2: settings
+# live in state files), and 06copyenv has put back the mail server binding,
+# the one value kept in the environment. There is no database dump to load.
 # Rebuild routes and automx.conf from whatever was restored; must tolerate
 # the mail module or accounts provider not yet being present (DESIGN.md 4.2).
 

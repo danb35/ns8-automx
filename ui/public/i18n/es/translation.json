@@ -94,6 +94,12 @@
     "title": "Configuración",
     "configure_instance": "Configurar {instance}",
     "save": "Guardar",
+    "mail_server": "Servidor de correo",
+    "mail_server_help": "El servidor de correo para cuyos dominios esta instancia configura los clientes. Si lo cambia, los dominios que solo tiene el anterior dejan de atenderse y aparecen como huérfanos en la página Dominios.",
+    "mail_server_choose": "Elija un servidor de correo",
+    "mail_server_used_by": "{server}: usado por {module}",
+    "mail_server_missing_title": "Servidor de correo no encontrado",
+    "mail_server_missing_description": "El servidor de correo al que está vinculada esta instancia ya no está en el clúster, por lo que no se atiende nada. Elija otro y guarde.",
     "service_host": "Host del servicio (FQDN)",
     "service_host_help": "Destino de CNAME/SRV y host de Autodiscover. Déjelo en blanco para usar el propio FQDN de este nodo.",
     "http_to_https": "Redirigir HTTP a HTTPS",
@@ -182,6 +188,8 @@
     "unsupported": "No admitido por este proveedor de DNS",
     "invalid_request": "Solicitud no válida",
     "unknown_provider": "Proveedor de DNS desconocido",
-    "groupware_not_available": "Esa aplicación no ofrece este servicio para el servidor de correo."
+    "groupware_not_available": "Esa aplicación no ofrece este servicio para el servidor de correo.",
+    "mail_server_not_found": "Ese servidor de correo no está en el clúster o aún no está configurado.",
+    "mail_server_in_use": "Otra instancia de automx ya usa ese servidor de correo. Dos instancias en un mismo servidor de correo sobrescribirían mutuamente sus registros DNS."
   }
 }
