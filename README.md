@@ -320,6 +320,11 @@ It runs on a throwaway CI node with no mail module present, so it confirms
 rather than exercising the full enable-a-domain path, which needs the real infrastructure
 `tests/integration/` and the manual passes in DESIGN.md cover instead.
 
+Its `ui`-tagged case takes screenshots of every page, with the empty states since there is no mail
+module. It runs when `ui/` or `build-images.sh` changes, which includes Renovate's pull requests, or
+on demand with the `ui_tests` input of the "Test module" workflow. On a pull request the images go to
+the `ci-screenshots` branch and are linked from a comment; otherwise they are in the run's artifacts.
+
 ## UI translation
 
 English is the source language, in `ui/public/i18n/en/translation.json`. German, Spanish,

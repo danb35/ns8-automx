@@ -4,6 +4,24 @@ Library    SSHLibrary
 *** Variables ***
 # Any resolvable-looking name: the schema demands a dot, nothing resolves it.
 ${TEST_HOST}    automx.ns8-ci.test
+${ADMIN_USER}    admin
+${ADMIN_PASSWORD}    Nethesis,1234
+
+*** Keywords ***
+Login to cluster-admin
+    New Page    https://${NODE_ADDR}/cluster-admin/
+    Fill Text    text="Username"    ${ADMIN_USER}
+    Click    button >> text="Continue"
+    Fill Text    text="Password"    ${ADMIN_PASSWORD}
+    Click    button >> text="Log in"
+    Wait For Elements State    css=#main-content    visible    timeout=10s
+
+Open page
+    [Arguments]    ${page}    ${heading}    ${shot}
+    Go To    https://${NODE_ADDR}/cluster-admin/#/apps/${module_id}?page=${page}
+    Wait For Elements State    iframe >>> h2 >> text="${heading}"    visible    timeout=30s
+    Sleep    5s
+    Take Screenshot    filename=${OUTPUT DIR}/browser/screenshot/${shot}.png
 
 *** Test Cases ***
 Check if automx is installed correctly
@@ -65,6 +83,19 @@ Check if automx service is healthy
     ${output}  ${rc} =    Execute Command    api-cli run module/${module_id}/get-status --data 'null'
     ...    return_rc=True
     Should Be Equal As Integers    ${rc}  0
+
+Take screenshots of the pages
+    # No mail module on this node, so they show the empty states.
+    [Tags]    ui
+    Import Library    Browser
+    New Browser    chromium    headless=True
+    New Context    ignoreHTTPSErrors=True
+    Login to cluster-admin
+    Open page    status    Status    1._Status
+    Open page    domains    Domains    2._Domains
+    Open page    settings    Settings    3._Settings
+    Open page    about    About    4._About
+    Close Browser
 
 Check if automx is removed correctly
     ${rc} =    Execute Command    remove-module --no-preserve ${module_id}
