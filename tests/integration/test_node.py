@@ -174,7 +174,7 @@ class NodeIntegration(unittest.TestCase):
         rc, again = api(cls.automx, 'get-configuration', {})
         self.assertEqual(rc, 0)
         self.assertEqual(again['mail_server'], config['mail_server'])
-        rc, _ = api(cls.automx, 'configure-module', {'mail_server': '11111111-2222-3333-4444-555555555555'})
+        rc, _ = api(cls.automx, 'configure-module', {'mail_server': '11111111-2222-3333-4444-555555555555'}, check=False)
         self.assertNotEqual(rc, 0)
 
     def test_02_get_domains_reflects_the_real_mail_module(self):
@@ -385,6 +385,10 @@ class NodeIntegration(unittest.TestCase):
         rc, config = api(restored_id, 'get-configuration', {})
         self.assertFalse(config['http2https'], 'state/settings.json should have round-tripped through the backup')
         self.assertFalse(config['display_names'])
+        # core skips state/environment on restore: restore-module/06copyenv
+        # has to bring the mail server binding back.
+        _, source_config = api(type(self).automx, 'get-configuration', {})
+        self.assertEqual(config['mail_server'], source_config['mail_server'])
         self.assertEqual(http_status_now(restored_id, '/health/ready'), '200')
 
     def test_11_remove_module(self):
