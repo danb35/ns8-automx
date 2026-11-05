@@ -325,9 +325,13 @@ rather than exercising the full enable-a-domain path, which needs the real infra
 `tests/integration/` and the manual passes in DESIGN.md cover instead.
 
 Its `ui`-tagged case takes screenshots of every page, with the empty states since there is no mail
-module. It runs when `ui/` or `build-images.sh` changes, which includes Renovate's pull requests, or
-on demand with the `ui_tests` input of the "Test module" workflow. On a pull request the images go to
-the `ci-screenshots` branch and are linked from a comment; otherwise they are in the run's artifacts.
+module. It runs on its own when the commit being tested changes `ui/` or `build-images.sh`, which
+includes Renovate's pull requests. Only that commit is compared with its parent, not the whole pull
+request, so a pull request whose last commit is docs only or a merge from `master` gets none. Run the
+"Test module" workflow by hand on the branch with `ui_tests` on, for example
+`gh workflow run test-module.yml --ref <branch> -f ui_tests=true -f debug_shell=false`. On a pull
+request the images go to the `ci-screenshots` branch and are linked from a comment; otherwise they are
+in the run's artifacts.
 
 ## UI translation
 
