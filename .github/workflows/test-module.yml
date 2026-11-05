@@ -1,0 +1,41 @@
+name: Test module
+# The run belongs to the default branch under workflow_run: name the tested one.
+run-name: "Test ${{ github.event.workflow_run.head_branch || github.ref_name }} on QEMU"
+
+# Boots throwaway NS8 nodes on the runner and runs tests/ against them, so the
+# module is tested without any external infrastructure. Chained on the build:
+# a broken image never reaches the test.
+
+on:
+  workflow_dispatch:
+    inputs:
+      debug_shell:
+        description: "Debug shell"
+        required: true
+        type: boolean
+      ui_tests:
+        description: "Run the cases tagged ui and publish their screenshots"
+        required: false
+        default: false
+        type: boolean
+  workflow_run:
+    workflows: ["Publish images"]
+    types: [completed]
+
+jobs:
+  run:
+    name: "Run tests"
+    # Report each leg on the pull request, post the screenshots as a comment
+    # and keep them on the ci-screenshots branch. A called workflow cannot hold
+    # more than its caller; granted here rather than by raising the repository
+    # default, so the write token stops at this job.
+    permissions:
+      contents: write
+      pull-requests: write
+      statuses: write
+    uses: NethServer/ns8-github-actions/.github/workflows/test-module-qemu.yml@v1
+    with:
+      # Screenshots when ui/ or build-images.sh changed, Renovate's PRs included.
+      ui_tests_strategy: ${{ github.event.inputs.ui_tests == 'true' && 'always' || 'on_ui_change' }}
+      debug_shell: ${{ github.event.inputs.debug_shell == 'true' }}
+      # Other inputs: https://github.com/NethServer/ns8-github-actions/blob/v1/docs/test-module-qemu.md#inputs

@@ -33,10 +33,10 @@ the fixes that dnshelper needed (https://github.com/danb35/ns8-dnshelper); do th
 expecting green runs, and check the Actions tab after the first push.
 
 - **Rename every `kickstart` placeholder.** `reponame="kickstart"` in `build-images.sh`,
-  `images: "kickstart"` in `.github/workflows/clean-registry.yml`, and `image_name: kickstart` in
-  `.github/workflows/test-module-qemu.yml` (it must match `reponame`). Also the robot test file and
-  its texts in `tests/`, `ui/public/metadata.json` and the i18n files. A module name must not end
-  in a digit.
+  and `images: "kickstart"` in `.github/workflows/clean-registry.yml`. The test workflow derives the
+  image name from the repository, so `reponame` must be its name minus `ns8-`. Also the robot test
+  file and its texts in `tests/`, `ui/public/metadata.json` and the i18n files. A module name must
+  not end in a digit.
 - **Keep the repo public.** While dnshelper was private its first "Publish images" run failed at
   checkout with "Repository not found". `publish-images.yml` skips the very first run
   (`if: github.run_number > 1`); that is normal. After the first publish, check that the ghcr
@@ -59,11 +59,11 @@ expecting green runs, and check the Actions tab after the first push.
 - **Deleting a branch while its image publish is still running** leaves the image behind (the
   clean-up ran first). Run it by hand: `gh workflow run clean-registry.yml -f tag=<branch with / as ->`.
 
-How the tests run: `test-module-qemu.yml` starts after "Publish images" succeeds (`workflow_run`),
-boots throwaway NS8 nodes (Rocky 9 and Debian 13) and runs `tests/*.robot` against the image just
-published as `ghcr.io/danb35/<module>:<branch>`. It needs `permissions: contents: read,
-pull-requests: write` in the caller (the template has it). `tests/__init__.robot` opens the SSH
-connection. Robot tests must use fake credentials only; nothing in CI may talk to a real service.
+How the tests run: `test-module.yml`, which calls NethServer/ns8-github-actions, starts after
+"Publish images" succeeds (`workflow_run`), boots throwaway NS8 nodes (Rocky 9 and Debian 13) and runs `tests/*.robot` against the image just
+published as `ghcr.io/danb35/<module>:<branch>`. It needs `permissions: contents: write,
+pull-requests: write, statuses: write` in the caller (for the leg status and the screenshots).
+`tests/__init__.robot` opens the SSH connection. Robot tests must use fake credentials only; nothing in CI may talk to a real service.
 It has failed for reasons unrelated to the code (SSH connection refused right after the VM starts;
 NS8's own cluster setup failing to pull its default `metrics` module): re-run before suspecting the
 module, and read the failing step with `gh run view --job <id> --log`.
