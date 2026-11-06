@@ -140,6 +140,8 @@ The module:
 
 **Settings in a browser (2026-11-05, same cluster, `automx33`, checked by the developer):** the dropdown lists both mail servers with the bound one selected and the providers shown, and picking and saving another behaves as designed. Not seen in a browser: a mail server shown as used by another instance, and the warning for a bound mail server that is gone.
 
+**After the review fix (2026-11-06, same cluster, branch image):** with `automx33` bound to `mail2`, a new `automx34` on node 2 (nearest `mail2`) defaulted to `mail1`, showed `mail2` as used by `automx33`, saved `http2https` alone without a binding, and was pinned to `mail1` by enabling `2v6.in`. A third instance, `automx35`, forced onto node 1 with `add-module --force` so that both mail modules were taken, had `mail_server: null` and no default, saved `http2https` alone, refused `mail1` (`mail_server_in_use`), stayed stopped, and had no domain it could enable. `mail_server_not_configured` is covered by unit tests only, since both mail modules there were configured.
+
 ### 3.3 Accounts provider
 
 - Use `agent.ldapproxy.Ldapproxy()`: `get_domains_list()`, `get_domain(<user_domain>)`. The result holds a local endpoint (ldapproxy listens on `127.0.0.1`, no TLS needed on that hop), bind credentials, base DN, schema (`rfc2307` or `ad`).
