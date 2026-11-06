@@ -189,7 +189,8 @@
     "invalid_request": "Invalid request",
     "unknown_provider": "Unknown DNS provider",
     "groupware_not_available": "That app does not provide this service for the mail server.",
-    "mail_server_not_found": "That mail server is not on the cluster, or is not configured yet.",
-    "mail_server_in_use": "Another automx instance already uses that mail server. Two instances on one mail server would overwrite each other's DNS records."
+    "mail_server_not_found": "That mail server is not on the cluster.",
+    "mail_server_in_use": "Another automx instance already uses that mail server. Two instances on one mail server would overwrite each other's DNS records.",
+    "mail_server_not_configured": "That mail server is not configured yet. Configure it first."
   }
 }

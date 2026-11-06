@@ -3,16 +3,22 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Discovery helpers for the one mail module instance this module serves
-# (DESIGN.md decision #2), which is bound by its MODULE_UUID (decision #15):
-# the MAIL_SERVER environment variable, as ns8-piler and ns8-sogo call it.
-# The UUID survives a move or restore of the mail module, while its module
-# id changes. Without a binding, the first provider is used, sorted by node
-# proximity; reconcile() records that choice once a domain is enabled, so a
-# mail module installed later can't take over silently. Confirmed against a real read of NethServer/ns8-mail
-# (DESIGN.md 3.2): get-configuration returns {"hostname", "user_domain"},
-# list-domains returns an array of {"domain", "addusers", "addgroups",
-# "addaliases", "catchall", "bccaddr", "description"} with no per-domain
-# ports or user_domain.
+# (DESIGN.md decision #2).
+#
+# The instance is bound to that mail module by its MODULE_UUID (decision
+# #15), stored as MAIL_SERVER in the environment, the name ns8-piler and
+# ns8-sogo use. The UUID survives a move or restore of the mail module,
+# while its module id changes. Without a binding, the default is the
+# nearest mail module that no other automx instance is bound to, since two
+# instances on one mail module would overwrite each other's DNS records
+# through dnshelper; reconcile() records that default once a domain is
+# enabled, so a mail module installed later can't take over silently.
+#
+# Confirmed against a real read of NethServer/ns8-mail (DESIGN.md 3.2):
+# get-configuration returns {"hostname", "user_domain"}, list-domains
+# returns an array of {"domain", "addusers", "addgroups", "addaliases",
+# "catchall", "bccaddr", "description"} with no per-domain ports or
+# user_domain.
 #
 # get-configuration's "user_domain" is a full descriptor object (from
 # ns8-core's cluster.userdomains.list_domains(), keyed by domain name but
@@ -53,12 +59,28 @@ def bound_uuid():
 
 
 def _provider(rdb, module_uuid=None):
-    """The imap service record of module_uuid, else of the bound mail module,
-    else of the nearest one; None if there is no such provider."""
+    """The imap service record of module_uuid, else of the bound mail
+    module, else of the nearest one no other automx instance is bound to;
+    None if there is no such provider."""
     module_uuid = module_uuid or bound_uuid()
-    filters = {"module_uuid": module_uuid} if module_uuid else {}
-    providers = agent.list_service_providers(rdb, "imap", "tcp", filters)
-    return providers[0] if providers else None
+    if module_uuid:
+        providers = agent.list_service_providers(rdb, "imap", "tcp", {"module_uuid": module_uuid})
+        return providers[0] if providers else None
+    providers = agent.list_service_providers(rdb, "imap", "tcp")
+    if not providers:
+        return None
+    taken = users_of(rdb)
+    return next((p for p in providers if p.get("module_uuid") not in taken), None)
+
+
+def _is_mail_module(rdb, module_uuid):
+    """Whether module_uuid belongs to an installed mail module, configured
+    or not: ns8-mail publishes its imap key only once configured."""
+    for module_id, uuid in (rdb.hgetall("cluster/module_uuid") or {}).items():
+        if uuid == module_uuid:
+            image_url = (rdb.hgetall(f"module/{module_id}/environment") or {}).get("IMAGE_URL")
+            return bool(image_url) and agent.get_image_name_from_url(image_url) == "mail"
+    return False
 
 
 def find_instance(rdb, module_uuid=None):
@@ -69,7 +91,8 @@ def find_instance(rdb, module_uuid=None):
 
 def current_uuid(rdb):
     """The UUID in use: the binding, even if that module is gone, else the
-    UUID of the module used by default. None without either."""
+    UUID of the module used by default. None without either, for example
+    when every mail module is bound to another automx instance."""
     bound = bound_uuid()
     if bound:
         return bound
@@ -145,12 +168,16 @@ def list_domains(mail_module_id):
 
 def get_instance_info(rdb, module_uuid=None):
     """Convenience: (module_id, hostname, user_domain_name, domain_names)
-    for the mail instance in use (or module_uuid), raising MailNotFound/MailNotConfigured
-    instead of forcing every caller to re-check for None/missing fields.
+    for the mail instance in use (or module_uuid), raising MailNotFound or
+    MailNotConfigured instead of forcing every caller to re-check for
+    None/missing fields.
     user_domain_name is the plain domain-name string (see module docstring),
     ready to pass to Ldapproxy()/agent.bind_user_domains()."""
     module_id = find_instance(rdb, module_uuid)
     if module_id is None:
+        wanted = module_uuid or bound_uuid()
+        if wanted and _is_mail_module(rdb, wanted):
+            raise MailNotConfigured()
         raise MailNotFound()
 
     config = get_configuration(module_id)

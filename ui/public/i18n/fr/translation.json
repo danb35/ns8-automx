@@ -189,7 +189,8 @@
     "invalid_request": "Requête invalide",
     "unknown_provider": "Fournisseur DNS inconnu",
     "groupware_not_available": "Cette application ne fournit pas ce service pour le serveur de messagerie.",
-    "mail_server_not_found": "Ce serveur de messagerie n'est pas dans le cluster ou n'est pas encore configuré.",
-    "mail_server_in_use": "Une autre instance d'automx utilise déjà ce serveur de messagerie. Deux instances sur un même serveur de messagerie écraseraient mutuellement leurs enregistrements DNS."
+    "mail_server_not_found": "Ce serveur de messagerie n'est pas dans le cluster.",
+    "mail_server_in_use": "Une autre instance d'automx utilise déjà ce serveur de messagerie. Deux instances sur un même serveur de messagerie écraseraient mutuellement leurs enregistrements DNS.",
+    "mail_server_not_configured": "Ce serveur de messagerie n'est pas encore configuré. Configurez-le d'abord."
   }
 }

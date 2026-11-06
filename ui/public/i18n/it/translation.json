@@ -189,7 +189,8 @@
     "invalid_request": "Richiesta non valida",
     "unknown_provider": "Provider DNS sconosciuto",
     "groupware_not_available": "Questa applicazione non fornisce questo servizio per il server di posta.",
-    "mail_server_not_found": "Quel server di posta non è nel cluster o non è ancora configurato.",
-    "mail_server_in_use": "Un'altra istanza di automx usa già quel server di posta. Due istanze sullo stesso server di posta sovrascriverebbero a vicenda i propri record DNS."
+    "mail_server_not_found": "Quel server di posta non è nel cluster.",
+    "mail_server_in_use": "Un'altra istanza di automx usa già quel server di posta. Due istanze sullo stesso server di posta sovrascriverebbero a vicenda i propri record DNS.",
+    "mail_server_not_configured": "Quel server di posta non è ancora configurato. Configuralo prima."
   }
 }

@@ -30,7 +30,9 @@ if requested_mail and requested_mail != mail.bound_uuid():
         _id, _hostname, _user_domain, new_mail_domains = mail.get_instance_info(rdb, requested_mail)
         if requested_mail in mail.users_of(rdb):
             error = "mail_server_in_use"
-    except (mail.MailNotFound, mail.MailNotConfigured):
+    except mail.MailNotConfigured:
+        error = "mail_server_not_configured"
+    except mail.MailNotFound:
         error = "mail_server_not_found"
     if error:
         agent.set_status("validation-failed")

@@ -73,7 +73,13 @@ def build(
 
     agent.assert_exp = assert_exp
 
-    agent.redis_connect = mock.Mock(return_value=redis if redis is not None else mock.Mock())
+    # An empty cluster by default: no other modules, so automx.mail finds no
+    # other automx instance bound to a mail module.
+    if redis is None:
+        redis = mock.Mock()
+        redis.hkeys.return_value = []
+        redis.hgetall.return_value = {}
+    agent.redis_connect = mock.Mock(return_value=redis)
 
     agent.list_service_providers = mock.Mock(
         return_value=list_service_providers_result if list_service_providers_result is not None else []
