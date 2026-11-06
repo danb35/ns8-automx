@@ -201,9 +201,11 @@ Open **Settings**.
 ![The Settings page](images/settings.png)
 
 - **Mail server** — the mail server whose domains this automx instance configures clients
-  for. With one mail server on the cluster there is nothing to decide. With several, each
-  automx serves one, and a mail server another automx already uses is shown as unavailable.
-  If you change it, domains only the previous mail server has stop being served and show as
+  for. Until you choose one, automx uses the nearest mail server that no other automx
+  instance uses, and keeps it once you enable a domain. A mail server another automx already
+  uses is shown as unavailable. If every mail server is taken, the field reads **Choose a
+  mail server**, the Domains page is empty and nothing is served until one is free. If you
+  change it, domains only the previous mail server has stop being served and show as
   orphaned on the Domains page, and any calendar or ActiveSync provider the new one doesn't
   offer is reset to None. DNS records are left as they are.
 - **Service host (FQDN)** — the name the CNAME and SRV records point at, and the host
@@ -315,6 +317,7 @@ missing, the same as it would for a domain enabled for the first time.
 | A DNS record shows **Conflict** | Something else already exists at that name with a different value (or a different record type). Use **Overwrite conflicting records** if dnshelper manages the zone, after reviewing the preview, or fix it at your DNS provider directly otherwise |
 | A client shows the person's raw email address instead of their name | Either **Include display names** is off in Settings, or the address the client asked about is a mail *alias* that automx can't resolve: one shared by several people, one added in the last 15 minutes, or any alias while **Resolve mail aliases** is off. The client then falls back to a generic answer and the person enters their own username |
 | Settings says **Mail server not found** | The mail server this automx is bound to is no longer on the cluster, so nothing is being served. Choose another one in Settings and save. |
+| Settings says **Choose a mail server** and the Domains page is empty | Every mail server on the cluster is already used by another automx instance. Free one up, by changing or removing that other instance, then choose it here and save. |
 | A domain is greyed out and marked **Orphaned** | The mail domain it was for no longer exists on the mail module. Nothing is being served for it; remove it from the mail module for good if it's not coming back |
 | The service on the Status page shows as not running | Check the service logs from the Status page's Logs card. A validation failure in the rendered configuration (for example, the accounts provider being briefly unreachable) leaves the *previous* working configuration in place rather than taking the service down, so this usually means something more fundamental — the mail module or the accounts provider being absent entirely |
 

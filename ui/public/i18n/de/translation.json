@@ -189,7 +189,8 @@
     "invalid_request": "Ungültige Anfrage",
     "unknown_provider": "Unbekannter DNS-Anbieter",
     "groupware_not_available": "Diese App stellt diesen Dienst für den Mailserver nicht bereit.",
-    "mail_server_not_found": "Dieser Mailserver ist nicht im Cluster oder noch nicht konfiguriert.",
-    "mail_server_in_use": "Eine andere automx-Instanz verwendet diesen Mailserver bereits. Zwei Instanzen auf einem Mailserver würden gegenseitig ihre DNS-Einträge überschreiben."
+    "mail_server_not_found": "Dieser Mailserver ist nicht im Cluster.",
+    "mail_server_in_use": "Eine andere automx-Instanz verwendet diesen Mailserver bereits. Zwei Instanzen auf einem Mailserver würden gegenseitig ihre DNS-Einträge überschreiben.",
+    "mail_server_not_configured": "Dieser Mailserver ist noch nicht konfiguriert. Konfigurieren Sie ihn zuerst."
   }
 }

@@ -189,7 +189,8 @@
     "invalid_request": "Solicitud no válida",
     "unknown_provider": "Proveedor de DNS desconocido",
     "groupware_not_available": "Esa aplicación no ofrece este servicio para el servidor de correo.",
-    "mail_server_not_found": "Ese servidor de correo no está en el clúster o aún no está configurado.",
-    "mail_server_in_use": "Otra instancia de automx ya usa ese servidor de correo. Dos instancias en un mismo servidor de correo sobrescribirían mutuamente sus registros DNS."
+    "mail_server_not_found": "Ese servidor de correo no está en el clúster.",
+    "mail_server_in_use": "Otra instancia de automx ya usa ese servidor de correo. Dos instancias en un mismo servidor de correo sobrescribirían mutuamente sus registros DNS.",
+    "mail_server_not_configured": "Ese servidor de correo aún no está configurado. Configúrelo primero."
   }
 }

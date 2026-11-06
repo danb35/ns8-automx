@@ -8,6 +8,8 @@
 
 import importlib.machinery
 import importlib.util
+import io
+import json
 import os
 import sys
 import unittest
@@ -45,6 +47,8 @@ DOMAINS = {
 
 
 def get_instance_info(rdb, module_uuid=None):
+    if module_uuid == "uuid-raw":
+        raise mail.MailNotConfigured()
     if module_uuid not in INFO:
         raise mail.MailNotFound()
     return INFO[module_uuid]
@@ -72,7 +76,7 @@ class SaveTests(unittest.TestCase):
                 mock.patch.dict(sys.modules, {"agent": fake_agent}), \
                 mock.patch.dict(os.environ, env, clear=False), \
                 mock.patch("json.load", return_value=data), \
-                mock.patch("sys.stdout"):
+                mock.patch("sys.stdout", new_callable=io.StringIO) as stdout:
             if not bound:
                 os.environ.pop("MAIL_SERVER", None)
             loader = importlib.machinery.SourceFileLoader("configure_module_10save", ACTION_PATH)
@@ -81,6 +85,7 @@ class SaveTests(unittest.TestCase):
             try:
                 loader.exec_module(module)
             except SystemExit as exc:
+                self.output = json.loads(stdout.getvalue())
                 return exc.code, fake_agent
         return 0, fake_agent
 
@@ -106,8 +111,22 @@ class SaveTests(unittest.TestCase):
     def test_server_used_by_another_instance_is_refused(self):
         code, _ = self.run_action({"mail_server": "uuid-b"}, bound="uuid-a", users={"uuid-b": "automx2"})
         self.assertEqual(code, 3)
+        self.assertEqual(self.output[0]["error"], "mail_server_in_use")
         self.bind.assert_not_called()
         self.delete_routes.assert_not_called()
+
+    def test_unconfigured_server_has_its_own_error(self):
+        code, _ = self.run_action({"mail_server": "uuid-raw"}, bound="uuid-a")
+        self.assertEqual(code, 3)
+        self.assertEqual(self.output[0]["error"], "mail_server_not_configured")
+        self.bind.assert_not_called()
+
+    def test_unbound_with_every_server_taken_still_saves_other_settings(self):
+        # The page sends no mail_server when there is no default to show.
+        code, _ = self.run_action({"http2https": False}, current=None, users={"uuid-a": "automx2", "uuid-b": "automx3"})
+        self.assertEqual(code, 0)
+        self.save_settings.assert_called_once()
+        self.bind.assert_not_called()
 
     def test_first_choice_of_the_default_binds_and_removes_nothing(self):
         code, _ = self.run_action({"mail_server": "uuid-a"}, current="uuid-a")
