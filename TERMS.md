@@ -32,7 +32,7 @@ Passwords are never handed out. A password sent to the profile download form is 
 | The names `autoconfig.<domain>` and `autodiscover.<domain>` | Let's Encrypt, to issue their certificates. Certificate Transparency logs then list them publicly | When a domain's routes are created, and on renewal |
 | Domain names, and the node's IP address | The DNS servers responsible for each domain, and the node's own resolvers | Each time DNS status is checked |
 | DNS records | The DNS host you chose, through [dnshelper](https://github.com/danb35/ns8-dnshelper) | Only if dnshelper is installed, manages the zone and you confirm a change. See [dnshelper's own page](https://github.com/danb35/ns8-dnshelper/blob/master/TERMS.md) |
-| Which domains are enabled, and the settings | Your backup destination, encrypted by NS8 | If you have configured backups |
+| Which domains are enabled, the settings, and which mail server automx uses | Your backup destination, encrypted by NS8 | If you have configured backups |
 
 How Let's Encrypt, DNS servers and DNS hosts handle this data is governed by their own terms.
 
@@ -50,12 +50,13 @@ These files are in the module's state directory, and none of them is backed up:
 
 ## What it is allowed to do on your cluster
 
-automx asks for more access than it uses, because the mail module and Traefik offer no narrower role:
+On the mail module and on Traefik, automx has NS8's built-in `reader` role, which allows only
+actions whose names start with `get-`, `list-`, `show-` or `read-`. It cannot reveal the mail master
+credentials, change relay or BCC rules, or set or delete certificates. It calls `get-configuration`,
+`list-domains` and `list-addresses` on the mail module, and `get-certificate` on Traefik.
 
-- `mail@any:mailadm` also allows revealing the mail master credentials and changing relay and BCC
-  rules. automx only calls `get-configuration`, `list-domains` and `list-addresses`.
-- `traefik@node:certadm` also allows setting and deleting certificates. automx only calls
-  `get-certificate`.
+On Traefik it also has `routeadm`, which allows creating and removing any route on the node. automx
+only touches its own routes, whose names start with its module id.
 
 The code is public, so you can check this.
 
