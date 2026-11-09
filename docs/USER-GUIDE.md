@@ -294,8 +294,8 @@ succeeded but a client still can't find it.
 
 ## Backup and restore
 
-automx's backup includes each domain's enabled/disabled flag and the module's settings
-(service host, HTTP-to-HTTPS default, display-names toggle). It does **not** include the
+automx's backup includes each domain's enabled/disabled flag, the module's settings and the
+mail server it uses. It does **not** include the
 rendered configuration file that's actually served — that file contains your directory's
 bind password, and it's regenerated automatically from your mail module and accounts
 provider every time the service starts, so there's nothing useful to preserve there
@@ -317,6 +317,7 @@ missing, the same as it would for a domain enabled for the first time.
 | A DNS record shows **Conflict** | Something else already exists at that name with a different value (or a different record type). Use **Overwrite conflicting records** if dnshelper manages the zone, after reviewing the preview, or fix it at your DNS provider directly otherwise |
 | A client shows the person's raw email address instead of their name | Either **Include display names** is off in Settings, or the address the client asked about is a mail *alias* that automx can't resolve: one shared by several people, one added in the last 15 minutes, or any alias while **Resolve mail aliases** is off. The client then falls back to a generic answer and the person enters their own username |
 | Settings says **Mail server not found** | The mail server this automx is bound to is no longer on the cluster, so nothing is being served. Choose another one in Settings and save. |
+| Outlook sets itself up with settings that don't match what automx hands out | Outlook asks the bare mail domain (`https://<domain>/autodiscover/autodiscover.xml`) before `autodiscover.<domain>`. If WebTop or a website answers on the bare domain, Outlook takes that answer. Serve nothing at that path on the bare domain, or have it match the mail server's settings; automx can't change it |
 | Settings says **Choose a mail server** and the Domains page is empty | Every mail server on the cluster is already used by another automx instance. Free one up, by changing or removing that other instance, then choose it here and save. |
 | A domain is greyed out and marked **Orphaned** | The mail domain it was for no longer exists on the mail module. Nothing is being served for it; remove it from the mail module for good if it's not coming back |
 | The service on the Status page shows as not running | Check the service logs from the Status page's Logs card. A validation failure in the rendered configuration (for example, the accounts provider being briefly unreachable) leaves the *previous* working configuration in place rather than taking the service down, so this usually means something more fundamental — the mail module or the accounts provider being absent entirely |

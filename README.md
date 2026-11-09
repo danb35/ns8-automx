@@ -70,6 +70,13 @@ Still unconfirmed with real clients: SOGo and WebTop calendars and contacts thro
 profile's CalDAV/CardDAV accounts, Thunderbird with an ActiveSync entry in Autoconfig, and
 Outlook with ActiveSync. See DESIGN.md section 2 for the details.
 
+0.3.0 binds each instance to one mail server, chosen in Settings and stored by its module UUID,
+instead of using whichever mail module it found first, and narrows the module's permissions to
+core's `reader` role on the mail module and Traefik (both asked for in the NethForge review). It was
+tested on a two-node cluster with a mail server on each node (Rocky 9 and Debian 13), including
+switching between them, a second and third instance competing for them, and a restore, and on the
+public node with its real certificate and DNS. See DESIGN.md 3.2 and decisions #15 and #16.
+
 Not in scope: PACC, Autodiscover v2, several mail instances at once. See DESIGN.md
 section 2 and 12.
 
@@ -88,7 +95,12 @@ section 2 and 12.
 - **One instance per node** (`org.nethserver.max-per-node=1`): every instance publishes the same
   Autodiscover paths on the node's FQDN. The Software center and `add-module` refuse a second one
   on a node, for an install, a clone or a restore. `add-module --force` skips the check for a test.
-- **Settings apply to all enabled domains.** Per-domain settings are planned for 0.3 (DESIGN.md 12).
+- **Settings apply to all enabled domains.** Per-domain settings are planned (DESIGN.md 12).
+- **Something else answering on the bare mail domain can take Outlook first.** Outlook asks
+  `https://<domain>/autodiscover/autodiscover.xml` before `autodiscover.<domain>`, so if WebTop or
+  any other web service answers there, Outlook uses that answer and never reaches automx. That
+  address belongs to whatever serves the domain's website, which automx doesn't route. Thunderbird
+  asks `autoconfig.<domain>` first, so it isn't affected.
 - **Nextcloud must be on automx's node**, since its host is read from a Traefik route.
 - **A shared alias can't be resolved**: an alias that delivers to several users, a group, a public
   folder or an external address. Its users type their own login. New aliases take up to 15 minutes
@@ -149,8 +161,8 @@ argument-less ones, since the admin UI sends no payload.
 
 | Action | Purpose |
 |---|---|
-| `configure-module` | Settings: service host override (default: this node's own FQDN), `http2https` default, `display_names` toggle, and the groupware modules (`dav_module`, `activesync_module`) whose endpoints are published. Starts the service once at least one domain is enabled. |
-| `get-configuration` | Settings plus a summary (enabled domain count, mail hostname, user domain, dnshelper presence) for the Status page, and the groupware modules that can provide CalDAV/CardDAV or ActiveSync. |
+| `configure-module` | Settings: the mail server (`mail_server`, a mail module's UUID), service host override (default: this node's own FQDN), `http2https` default, `display_names`, `resolve_aliases` and `sign_profiles` toggles, and the groupware modules (`dav_module`, `activesync_module`) whose endpoints are published. Refuses a mail server another automx instance uses. Starts the service once at least one domain is enabled. |
+| `get-configuration` | Settings plus a summary (enabled domain count, mail hostname, user domain, dnshelper presence, signing status) for the Status page, the cluster's mail servers with any other instance using each, and the groupware modules that can provide CalDAV/CardDAV or ActiveSync for each. |
 | `get-domains` | The mail module's domains merged with the module's own enable/disable state: enabled flag, route status, DNS status per record, orphan flag. |
 | `set-domains` | Enable or disable one or more domains; applies Traefik routes, renders `automx.conf`, validates it, reloads the service. |
 | `check-dns` | Recompute DNS status for one domain (through dnshelper if it covers the zone, otherwise by asking the zone's authoritative DNS servers). Also creates a domain's routes once its CNAME records are in place. |
@@ -161,11 +173,14 @@ argument-less ones, since the admin UI sends no payload.
 
 ## How it fits together
 
+- **Mail server**: an instance serves one mail module, stored as `MAIL_SERVER` (its module
+  UUID) in the environment, where other instances can see it and refuse the same one. With
+  nothing stored, the nearest mail module no other instance uses is the default, recorded once
+  a domain is enabled. See DESIGN.md 3.2.
 - **Mail domains and users**: `automx.conf` is rendered from the mail module's own
-  domains and hostname (`mail@any:mailadm`, the only consumer role ns8-mail offers —
-  broader than needed, but automx never calls the credential/BCC/relay actions it also
-  grants) and from the domain's LDAP/AD parameters via `agent.ldapproxy.Ldapproxy()`
-  (`cluster:accountconsumer`). See DESIGN.md 3.1–3.3.
+  domains and hostname (`mail@any:reader`, core's built-in role for `get-*`, `list-*`, `show-*`
+  and `read-*` actions) and from the domain's LDAP/AD parameters via
+  `agent.ldapproxy.Ldapproxy()` (`cluster:accountconsumer`). See DESIGN.md 3.1–3.3.
 - **Login/display-name lookup** does not use automx's native `backend = ldap`: it cannot
   express "match the login attribute against the local part, else match `mail` against
   the full address" in a single filter, and it hard-fails instead of falling back on a
@@ -179,7 +194,7 @@ argument-less ones, since the admin UI sends no payload.
   restricted to the Autodiscover path in both spellings (SRV records point there). See
   DESIGN.md 3.4/4.4.
 - **Profile signing** (optional) reads the service host's certificate from Traefik
-  (`traefik@node:certadm`) and has automx sign `.mobileconfig` profiles with it; a
+  (`get-certificate`, allowed by `traefik@node:reader`) and has automx sign `.mobileconfig` profiles with it; a
   certificate automx can't use is skipped with the reason shown in Settings. See
   `imageroot/pypkg/automx/signing.py`.
 - **Groupware** (CalDAV/CardDAV, ActiveSync) is read from the chosen module's own
@@ -235,6 +250,10 @@ backed up — it's a pure function of these two files plus live discovery data (
 domains, LDAP parameters), regenerated on every service start, and it contains the LDAP
 bind password.
 
+The platform backs up `state/environment` too, and `restore-module/06copyenv` puts the mail
+server binding (`MAIL_SERVER`) back from it. A mail module restored in place keeps its UUID, so
+the binding still fits.
+
 Restore re-runs the renderer, re-creates Traefik routes and DNS status, and tolerates
 the mail module or accounts provider not being present yet. It has been exercised on a
 real node: back up, restore into a *new* instance (not overwriting the original), and
@@ -271,13 +290,15 @@ It has no named volumes. These paths under the module's state directory are bind
 | `aliases/` | `/etc/automx/aliases` | Alias map | No, rebuilt by `automx-aliases.timer` |
 | `signing/` | `/etc/automx/signing` | Certificate and key, only when signing is on | No, read from Traefik again |
 
-`state/domains.json` and `state/settings.json` hold the module's own state and are the only files
-backed up. `state/environment` is the platform's own.
+`state/domains.json` and `state/settings.json` hold the module's own state. They are backed up,
+along with `state/environment`, which the platform backs up for every module.
 
-The module sets no environment variables of its own. It reads these, which the platform provides:
+The module sets one environment variable of its own, and reads the rest, which the platform
+provides:
 
 | Variable | Purpose |
 |---|---|
+| `MAIL_SERVER` | Set by the module: the UUID of the mail module it serves. Other instances read it to refuse the same one |
 | `TCP_PORT` | The node port allocated to the module (`org.nethserver.tcp-ports-demand=1`) |
 | `AUTOMX_APP_IMAGE` | The image to run, from the `org.nethserver.images` label |
 | `MODULE_ID`, `AGENT_INSTALL_DIR` | Used by the actions and scripts, as in any module |

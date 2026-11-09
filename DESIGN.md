@@ -1,6 +1,6 @@
 # ns8-automx: Design
 
-Status: draft v2, 2026-09-29. Audience: the developer (human or agent) implementing the module. Read `AGENTS.md`, `AGENTS-backend.md` and `AGENTS-frontend.md` first; this document assumes their conventions (pinned image tags, authorizations as labels in `build-images.sh`, Renovate, Robot tests, Vue 2 + Carbon UI).
+Status: v3 (0.3.0), 2026-11-09. Audience: the developer (human or agent) implementing the module. Read `AGENTS.md`, `AGENTS-backend.md` and `AGENTS-frontend.md` first; this document assumes their conventions (pinned image tags, authorizations as labels in `build-images.sh`, Renovate, Robot tests, Vue 2 + Carbon UI).
 
 Items marked **VERIFY** are things the design depends on that were not confirmed from documentation while writing this. Resolve each before or during implementation and record the answer in this file.
 
@@ -122,6 +122,8 @@ The module:
 - The `mail-settings-changed` event is published in the same `90publish_srv_keys` script. **Confirmed** payload: `{"reason", "module_id", "module_uuid", "node_id"}`, where `reason` is `AGENT_TASK_ACTION` (e.g. `configure-module`) or `"unknown"`. It fires on every `configure-module` run; verify during implementation that domain add/remove also routes through `configure-module` (and so fires this event) rather than a separate, silent action.
 - The mail module has a `list-domains` action (`module/mailN/list-domains`, no input). **Confirmed** output: a JSON array of objects matching the `mail-domain` schema in `imageroot/validator-definitions.json` — `domain` (required), `addusers`, `addgroups`, `addaliases`, `catchall`, `bccaddr`, `description`. There is no `user_domain` per domain; it comes from `get-configuration` instead, one per instance (matches 3.1). **Confirmed, and worse than hoped**: `mailadm` is the *only* consumer role ns8-mail defines (`imageroot/actions/create-module/30grants`); its `get-*`/`list-*` wildcard covers `list-domains`/`get-configuration`, but the same role also grants `reveal-master-credentials`, `set-always-bcc`, and the relay-rule actions. No narrower role exists upstream. **Decided:** accept `mail@any:mailadm` and document in the README that automx never calls the credential/BCC/relay actions it also allows (4.5, README "How it fits together"). A narrower role would be a request against `NethServer/ns8-mail`, not filed. **Superseded 2026-11-09 (decision #16):** core's built-in `reader` role is narrower and covers everything automx calls.
 
+**WebTop and the bare mail domain (NethForge review, NethServer/ns8-nethforge#50, 2026-11-05).** WebTop serves its own static autoconfig files on its hostname, and on the node FQDN automx's host+path routes win on Traefik priority, so the two do not conflict. The exception is a service on the bare mail domain: classic Outlook asks `https://<domain>/autodiscover/autodiscover.xml` before `autodiscover.<domain>`, so WebTop or a website answering there takes Outlook first. automx cannot route the bare domain; the README lists it as a limitation. Thunderbird asks `autoconfig.<domain>` first.
+
 **Mail server binding (decision #15, 2026-11-05).** Read from ns8-core and ns8-piler:
 
 - The value is in `state/environment`, not `settings.json`, because other instances need to read it: core publishes the environment to `module/<id>/environment` in Redis at the end of each task (`core/agent/htask.go`), and that is how Settings shows and refuses a mail server another automx uses. Two instances on one mail module would overwrite each other's CNAME records through dnshelper. An event handler's `set_env()` reaches Redis only at the next task, so the check can lag behind a binding recorded there.
@@ -237,7 +239,7 @@ Repository: `danb35/ns8-dnshelper`, release 0.2.0 at time of writing (2026-09-21
 Source of truth for domains is the mail module. The module stores only what it owns, in `state/`:
 
 - `state/domains.json`: `{"<domain>": {"enabled": true|false}}`. New mail domains default to disabled. A domain that disappears from the mail module is dropped from generated config and routes; the stored flag is kept and reported as "orphaned" in the UI until the administrator removes it.
-- `state/environment`: standard NS8 file (ports, image reference).
+- `state/environment`: standard NS8 file (ports, image reference), plus `MAIL_SERVER`, the bound mail module's UUID (3.2, decision #15). The platform backs it up, and `restore-module/06copyenv` restores the binding.
 - No secrets in Redis or `state/environment`. The LDAP bind password only appears in the rendered `automx.conf`, which is regenerated on every service start, written with mode 0600 and excluded from backup.
 
 Backup (`imageroot/etc/state-include.conf`): `state/domains.json` and any settings file. Restore re-runs the renderer, re-creates routes and re-checks DNS; it must tolerate the mail module or accounts provider not yet being present.
@@ -367,7 +369,7 @@ Schemas must accept `null` as well as `{}` for argument-less actions (the admin 
 
 | Action | Purpose |
 |---|---|
-| `configure-module` | Settings: service host override (default node FQDN), `http2https` default, `display_names` toggle (default on — see 8). Starts the service if at least one domain is enabled. |
+| `configure-module` | Settings: the mail server (`mail_server`, a mail module's UUID; decision #15), service host override (default node FQDN), `http2https` default, `display_names` toggle (default on — see 8), `resolve_aliases`, `sign_profiles` and the groupware modules. Starts the service if at least one domain is enabled. |
 | `get-configuration` | Settings plus a summary. |
 | `get-domains` | Mail domains from the mail module merged with `state/domains.json`: enabled flag, route status, DNS status per record, orphan flag. |
 | `set-domains` | Enable/disable domains; applies routes, renders config, validates, reloads. |
@@ -395,7 +397,7 @@ Pages:
 
 - **Status**: service state, number of enabled domains, mail instance and user domain in use, dnshelper present/absent, link to logs.
 - **Domains**: table with columns domain, enable toggle, DNS status (a summary tag with a detail drawer), route/certificate status, actions. Row action opens a DNS dialog: records with per-record status, conflicts, `dry_run` preview, and the Create / Overwrite / Skip choices when dnshelper can act; otherwise a copyable list of records and a "check again" button. A banner explains the missing-rule case with the rule to add. A second row action, **Get profile link**, opens the dialog described in 7.1.
-- **Settings**: service host override, `http2https` default, display-names toggle (on by default — 8), with copy explaining the disclosure trade-off.
+- **Settings**: the mail server (a dropdown of the cluster's mail modules, those another automx uses shown as unavailable; 3.2), service host override, `http2https` default, display-names toggle (on by default — 8), with copy explaining the disclosure trade-off.
 - **About**: standard.
 
 The domains table must state clearly, for domains with no dnshelper coverage, that DNS is manual. English is the source language in `ui/public/i18n/en/translation.json`.
@@ -593,7 +595,7 @@ Not separately broken out in this pass: whether Outlook's Autodiscover specifica
 | 11 | Client-facing IMAP and SMTP use implicit TLS on the standard secure ports, IMAPS 993 and SMTPS 465, not STARTTLS/587, unless the mail module explicitly reports different public ports. |
 | 12 | `http2https` default is **`true`** (HTTPS-only, HTTP redirected), confirmed 2026-09-24 by real-client testing (9.3, VERIFY item 6): Betterbird, Outlook LTSC and Apple Mail all worked correctly with no plain-HTTP fallback needed. |
 | 13 | A domain's routes are created only once its DNS actually resolves, not unconditionally on enable (5.6) — reverses v1's original "create the route regardless, Traefik will keep retrying" choice, found wrong live 2026-09-23: Traefik's ACME provider only ever attempts a domain once, when its dynamic config changes, with no background retry of a domain that never got a certificate. `check-dns` re-triggers route creation once a domain's DNS turns out ready, so there's no separate manual step once DNS is in place. |
-| 14 | One instance per node (`org.nethserver.max-per-node=1`, added 2026-11-04, as suggested in dnshelper's NethForge review, NethServer/ns8-nethforge#47). Every instance publishes the same Autodiscover paths on the node's FQDN, and all of them serve the first mail module found, so a second one on a node has nothing to add. core reads the label from the repository listing (`cluster/modules.py`), so the limit applies once a release with the label is listed; `tests/integration` passes with the label on the image (LAN test node, Rocky 9, 14 tests), including its restore alongside the original through `restore-module`. |
+| 14 | One instance per node (`org.nethserver.max-per-node=1`, added 2026-11-04, as suggested in dnshelper's NethForge review, NethServer/ns8-nethforge#47). Every instance publishes the same Autodiscover paths on the node's FQDN, so a second one on a node would fight over them (and, before decision #15, all of them served the first mail module found). core reads the label from the repository listing (`cluster/modules.py`), so the limit applies once a release with the label is listed; `tests/integration` passes with the label on the image (LAN test node, Rocky 9, 14 tests), including its restore alongside the original through `restore-module`. |
 | 15 | An instance is bound to one mail module by its `MODULE_UUID`, in the `MAIL_SERVER` environment variable, as ns8-piler and ns8-sogo name it (requested in the NethForge review, NethServer/ns8-nethforge#50). Before this, `mail.find_instance()` took the first `imap` provider by node proximity with nothing stored, so a mail module installed later on automx's node took over silently and domains enabled on the old one dropped out. See 3.2. |
 | 16 | automx uses core's built-in `reader` role on mail and Traefik instead of `mailadm` and `certadm` (suggested in the NethForge review, NethServer/ns8-nethforge#50). Core's `add-module` gives every module a `reader` role with `get-*`, `list-*`, `show-*` and `read-*` (`cluster/actions/add-module/50update`, since 2021), which covers `get-configuration`, `list-domains`, `list-addresses` and `get-certificate`; `mailadm` also allowed `reveal-master-credentials`, `set-always-bcc` and the relay rules, and `certadm` setting and deleting certificates. Traefik keeps `routeadm` in the same clause (`routeadm,reader`): `cluster.grants.add_module_permissions()` stores one role string per target module, so a second clause for Traefik would replace the first. `update-module` rewrites them, so an update swaps the roles of an existing instance. **LAN test cluster (2026-11-09):** updating `automx33` to the branch image changed its roles from `routeadm,certadm` on `traefik1` and `mailadm` on `mail1` and `mail2` to `routeadm,reader` and `reader`. Afterwards the mail server list and groupware (including Nextcloud's host from its Traefik route), signing (`no_certificate`, so `get-certificate` answered), disabling and enabling a domain with its node-FQDN routes removed and re-created, `check-dns`, the alias map and an Autoconfig answer for an alias all worked, and `reveal-master-credentials` on `mail1` was refused with 403. **Public node (2026-11-09, ns8-test.2v6.in, Rocky 9, `automx3` updated from 0.2.6):** the roles changed the same way and the update pinned `mail1` as `MAIL_SERVER`, with every other setting and both domains (`automx.2v6.in` in the dnshelper zone, `db5.us` with manual DNS) still `configured` and their records `ok`. Turning signing on read the node's real Let's Encrypt certificate through `get-certificate` (`internal`, `trusted: true`). From outside, Autoconfig for both domains returned login `tester` and display name `Test User`, and both Autodiscover spellings returned 200 on `autodiscover.automx.2v6.in` and on the node FQDN. `reveal-master-credentials` and `set-default-certificate` were refused with 403. |
 
@@ -612,16 +614,16 @@ Not separately broken out in this pass: whether Outlook's Autodiscover specifica
 
 ## 12. Later phases
 
-### Planned for 0.3: per-domain settings
+### Planned for 0.4: per-domain settings
 
-Today every setting applies to all enabled domains at once: `automx.conf` has one `[global]` section, and only the `domains` allowlist varies (4.3). 0.3 makes most of them per domain, so for example one domain can hand out display names and SOGo calendars while another hands out neither. In scope:
+Today every setting applies to all enabled domains at once: `automx.conf` has one `[global]` section, and only the `domains` allowlist varies (4.3). 0.4 makes most of them per domain, so for example one domain can hand out display names and SOGo calendars while another hands out neither. In scope:
 
 - `display_names`: whether a domain's responses include the user's display name (the disclosure trade-off in 8 is a per-domain decision).
 - `resolve_aliases`: whether a domain's aliases resolve to the owner's login.
 - `dav_module`: the CalDAV/CardDAV provider (Nextcloud, SOGo, WebTop or none) per domain.
 - `activesync_module`: the ActiveSync provider (SOGo, WebTop or none) per domain.
 
-Each keeps its current instance-wide value as the default, and a domain can override it. An update from 0.2.x keeps every domain on today's values, so nothing a client receives changes until the administrator sets an override.
+Each keeps its current instance-wide value as the default, and a domain can override it. An update from 0.3.x keeps every domain on today's values, so nothing a client receives changes until the administrator sets an override.
 
 Probably staying instance-wide: `service_host` (one name for the SRV/CNAME target and the node-FQDN Autodiscover route, 5.1/4.4), `http2https` (could move per domain, since routes are already per domain, but no need has come up), and `sign_profiles` (one certificate, the service host's).
 

@@ -32,7 +32,7 @@ Passwords are never handed out. A password sent to the profile download form is 
 | The names `autoconfig.<domain>` and `autodiscover.<domain>` | Let's Encrypt, to issue their certificates. Certificate Transparency logs then list them publicly | When a domain's routes are created, and on renewal |
 | Domain names, and the node's IP address | The DNS servers responsible for each domain, and the node's own resolvers | Each time DNS status is checked |
 | DNS records | The DNS host you chose, through [dnshelper](https://github.com/danb35/ns8-dnshelper) | Only if dnshelper is installed, manages the zone and you confirm a change. See [dnshelper's own page](https://github.com/danb35/ns8-dnshelper/blob/master/TERMS.md) |
-| Which domains are enabled, and the settings | Your backup destination, encrypted by NS8 | If you have configured backups |
+| Which domains are enabled, the settings, and which mail server automx uses | Your backup destination, encrypted by NS8 | If you have configured backups |
 
 How Let's Encrypt, DNS servers and DNS hosts handle this data is governed by their own terms.
 
