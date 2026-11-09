@@ -164,7 +164,7 @@ class NodeIntegration(unittest.TestCase):
         self.assertTrue(config['display_names'])
         self.assertEqual(config['enabled_domain_count'], 0)
         # Real mail module RPC (DESIGN.md 3.2), not a mock -- proves the
-        # mail@any:mailadm grant and the get-configuration call work.
+        # mail@any:reader grant and the get-configuration call work.
         self.assertIsNotNone(config['mail_hostname'])
         self.assertEqual(config['dnshelper_present'], bool(DNSHELPER_MODULE_ID))
         # The mail server choices, and a binding that survives a save.

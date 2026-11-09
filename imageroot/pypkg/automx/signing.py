@@ -12,9 +12,10 @@
 #
 # The certificate is the one Traefik already holds for the service host
 # (the node FQDN by default), which this module's own Autodiscover route
-# asks Let's Encrypt for. Reading it needs traefik@node:certadm. Traefik's
-# ACME key type is its default, RSA 4096; an uploaded custom certificate
-# may be ECDSA, which automx cannot sign with.
+# asks Let's Encrypt for. Reading it needs get-certificate, which
+# traefik@node:reader allows. Traefik's ACME key type is its default, RSA
+# 4096; an uploaded custom certificate may be ECDSA, which automx cannot
+# sign with.
 
 import base64
 import datetime
