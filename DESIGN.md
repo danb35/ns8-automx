@@ -1,6 +1,6 @@
 # ns8-automx: Design
 
-Status: v3 (0.3.0), 2026-11-09. Audience: the developer (human or agent) implementing the module. Read `AGENTS.md`, `AGENTS-backend.md` and `AGENTS-frontend.md` first; this document assumes their conventions (pinned image tags, authorizations as labels in `build-images.sh`, Renovate, Robot tests, Vue 2 + Carbon UI).
+Status: v4 (0.4.0), 2026-11-10. Audience: the developer (human or agent) implementing the module. Read `AGENTS.md`, `AGENTS-backend.md` and `AGENTS-frontend.md` first; this document assumes their conventions (pinned image tags, authorizations as labels in `build-images.sh`, Renovate, Robot tests, Vue 2 + Carbon UI).
 
 Items marked **VERIFY** are things the design depends on that were not confirmed from documentation while writing this. Resolve each before or during implementation and record the answer in this file.
 

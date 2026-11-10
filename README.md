@@ -77,6 +77,12 @@ tested on a two-node cluster with a mail server on each node (Rocky 9 and Debian
 switching between them, a second and third instance competing for them, and a restore, and on the
 public node with its real certificate and DNS. See DESIGN.md 3.2 and decisions #15 and #16.
 
+0.4.0 lets each domain have its own display names, alias resolution, and calendar, contacts and
+ActiveSync providers, set under **Domain settings** on the Domains page, with Settings holding the
+defaults. An instance without per-domain settings serves exactly what it did before. It was tested on
+the two-node LAN cluster with SOGo, WebTop and Nextcloud, reading the Autoconfig, MobileSync and Apple
+profile answers for a user and an alias on two domains with different settings. See DESIGN.md 12.
+
 Not in scope: PACC, Autodiscover v2, several mail instances at once. See DESIGN.md
 section 2 and 12.
 
@@ -277,7 +283,9 @@ a clone on the same node have been tested on a real node; a move to another node
 
 Vue 2 with Carbon and `ns8-ui-lib`, in `ui/`. Three pages besides About: Status, Domains
 (the DNS status, domain settings and profile-link dialogs live here), and Settings. See the
-[user guide](docs/USER-GUIDE.md) for what each one does.
+[user guide](docs/USER-GUIDE.md) for what each one does. `ui/dev/` has a harness that runs the built
+UI outside NS8 with canned data, and the script that takes the user guide's screenshots (see its
+[README](ui/dev/README.md)).
 
 ```bash
 cd ui && yarn install && yarn build

@@ -164,7 +164,7 @@ single record, on purpose, so a bug or a misconfigured module can only ever touc
 you explicitly allowed. Until you do, automx's own DNS status dialog says so directly and
 shows the exact rule to add, with the real zone name already filled in:
 
-![DNS status showing the missing access rule, with the suggested rule to add](images/dns-status-not-permitted.jpg)
+![DNS status showing the missing access rule, with the suggested rule to add](images/dns-status-not-permitted.png)
 
 Open dnshelper's **Access** page and add a rule with these values (or use `set-policy`
 with the same fields):
@@ -227,6 +227,8 @@ Open **Settings**.
 Under **Defaults for all domains**, the next settings apply to every enabled domain, unless
 a domain has its own value (see [Settings for one domain](#settings-for-one-domain)):
 
+![The defaults for all domains, with the calendar, contacts and ActiveSync providers](images/settings-groupware.png)
+
 - **Include display names** — on by default. automx looks up the display name for
   whichever address a client asks about and includes it in the response, which is
   normal, expected client behavior. Since these endpoints answer *any* request without a
@@ -243,8 +245,6 @@ a domain has its own value (see [Settings for one domain](#settings-for-one-doma
   aliases are picked up within 15 minutes.
 
 ### Calendars, contacts and ActiveSync
-
-![The calendar, contacts and ActiveSync settings](images/settings-groupware.png)
 
 If Nextcloud, SOGo or WebTop is installed, automx can also hand out its calendar and
 contacts (CalDAV/CardDAV) or ActiveSync settings, so clients set those up along with
@@ -271,6 +271,8 @@ give that domain its own value for any of the four defaults: **Include display n
 **Resolve mail aliases**, **CalDAV/CardDAV provider** and **ActiveSync provider**. For
 example, one domain can hand out SOGo calendars and display names while another hands out
 neither.
+
+![The Domain settings dialog, with display names and both providers turned off for one domain](images/domain-settings.png)
 
 Each setting starts at **Default**, which follows the Settings page and changes when you
 change it there; the choice in brackets shows what that is now. For the providers,
