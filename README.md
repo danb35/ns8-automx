@@ -116,26 +116,27 @@ For how the data is handled, see [TERMS.md](TERMS.md).
 
 ### From the Software center (recommended)
 
-automx is published in the software repository at
-[danb35.github.io/ns8-repomd](https://danb35.github.io/ns8-repomd/) (source:
-[danb35/ns8-repomd](https://github.com/danb35/ns8-repomd)). Add it to the cluster once:
+automx is published in [NethForge](https://github.com/NethServer/ns8-nethforge), the NethServer
+community's software repository. Every NS8 cluster already has the repository, but it is disabled by
+default, so enable it once:
 
-1. In the cluster admin UI, open **Settings → Software repositories** and click **Add repository**.
-2. Enter a name (for example `danb35`) and the URL `https://danb35.github.io/ns8-repomd/`, leave
-   **Status** enabled, and click **Add repository**. NS8 warns about third-party repositories;
-   this one only lists the images published from this GitHub account.
-3. Open the **Software center**, find **automx**, and click **Install**.
+1. In the cluster admin UI, open **Settings → Software repositories**, open the menu on the
+   `nethforge` row and choose **Enable**.
+2. Open the **Software center**, find **automx**, and click **Install**.
 
-Or add the repository from a shell on the leader node:
+Or enable the repository from a shell on the leader node:
 
-    api-cli run add-repository --data '{"name":"danb35","url":"https://danb35.github.io/ns8-repomd/","status":true}'
+    api-cli run alter-repository --data '{"name":"nethforge","status":true}'
 
-With the repository added, new releases are offered as updates in the Software center like any
-other app. They are usually listed within a few minutes of being published.
+With the repository enabled, new releases are offered as updates in the Software center like any
+other app. NethForge rebuilds its index several times a day, so a release can take some hours to
+appear. The optional [dnshelper](https://github.com/danb35/ns8-dnshelper) is in NethForge too.
 
-The optional [dnshelper](https://github.com/danb35/ns8-dnshelper) has moved to NethForge and is no
-longer in this repository. To install it, enable the `nethforge` repository on the same page: every
-cluster already has it, disabled by default.
+**If you installed from `danb35.github.io/ns8-repomd`:** automx is no longer listed there. Your
+instance keeps running and needs no reinstall; enable NethForge as above and it is offered updates
+again, because NS8 matches an installed module to a repository by its image
+(`ghcr.io/danb35/automx`). You can then remove the old repository, unless you use another module
+still published there.
 
 ### From the command line
 
