@@ -9,6 +9,32 @@
         "domains"
     ],
     "additionalProperties": false,
+    "definitions": {
+        "domain-settings": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "display_names": {
+                    "type": "boolean"
+                },
+                "resolve_aliases": {
+                    "type": "boolean"
+                },
+                "dav_module": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "activesync_module": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            }
+        }
+    },
     "properties": {
         "dnshelper_present": {
             "type": "boolean"
@@ -21,6 +47,8 @@
                     "domain",
                     "enabled",
                     "orphaned",
+                    "overrides",
+                    "settings",
                     "route_status",
                     "dns"
                 ],
@@ -35,6 +63,24 @@
                     "orphaned": {
                         "type": "boolean",
                         "description": "In state/domains.json but no longer among the mail module's domains"
+                    },
+                    "overrides": {
+                        "description": "The settings this domain overrides (set-domain-settings); a setting not listed follows the instance-wide default",
+                        "$ref": "#/definitions/domain-settings"
+                    },
+                    "settings": {
+                        "description": "The settings that apply to this domain: its overrides on top of the instance-wide defaults (DESIGN.md 12)",
+                        "allOf": [
+                            {
+                                "$ref": "#/definitions/domain-settings"
+                            }
+                        ],
+                        "required": [
+                            "display_names",
+                            "resolve_aliases",
+                            "dav_module",
+                            "activesync_module"
+                        ]
                     },
                     "route_status": {
                         "type": "string",

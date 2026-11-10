@@ -1,0 +1,101 @@
+<!doctype html>
+<!--
+  Copyright (C) 2026 Dan Brown
+  SPDX-License-Identifier: GPL-3.0-or-later
+
+  A fake NS8 shell around the built automx UI (ui/dist), for looking at it and
+  taking the user guide's screenshots. Adapted from ns8-dnshelper's ui/dev.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>automx UI harness</title>
+<style>
+  html, body { margin: 0; height: 100%; font-family: sans-serif; }
+  #bar { background: #262626; color: #f4f4f4; padding: 6px 12px; font-size: 12px; height: 18px; }
+  #bar a { color: #78a9ff; margin-right: 12px; }
+  iframe { border: 0; width: 100%; height: calc(100% - 30px); }
+</style>
+</head>
+<body>
+<div id="bar">
+  automx UI harness: a fake NS8 shell around the built UI, with canned module data.
+  <a href="#/apps/automx1" onclick="setTimeout(() => location.reload())">reload app</a>
+  <span id="log"></span>
+</div>
+<script>
+// The app finds its module id in the hash of the parent window (the NS8 shell).
+if (!/#\/apps\//.test(location.hash)) location.hash = "#/apps/automx1";
+
+// Minimal stand-in for the shell's Vue root: an event emitter plus what the app reads.
+function Emitter() {
+  const h = {};
+  return {
+    apiUrl: location.origin + "/api",
+    $on(e, f) { (h[e] = h[e] || []).push({ f, once: false }); },
+    $once(e, f) { (h[e] = h[e] || []).push({ f, once: true }); },
+    $off(e, f) { if (!f) delete h[e]; else h[e] = (h[e] || []).filter((x) => x.f !== f); },
+    $emit(e, ...args) {
+      (h[e] || []).slice().forEach((x) => { if (x.once) this.$off(e, x.f); x.f(...args); });
+    },
+  };
+}
+// The shell's own strings the app uses (core.$t).
+const SHARED = {
+  "common.cancel": "Cancel", "common.close": "Close", "common.version": "Version",
+  "common.copy_to_clipboard": "Copy to clipboard", "common.copied_to_clipboard": "Copied to clipboard",
+  "common.disabled": "Disabled", "common.show_more": "Show more", "common.status": "Status",
+  "common.success": "Success", "error.error": "Error",
+  "software_center.bugs": "Bugs", "software_center.documentation": "Documentation",
+  "software_center.instance": "Instance", "software_center.source_code": "Source code",
+  "software_center.source_package": "Source package",
+  "backup.title": "Backup", "backup.no_backup_configured": "No backup configured", "backup.go_to_backup": "Go to backup",
+  "backup.repository": "Repository", "backup.backup_has_not_run_yet": "Backup has not run yet",
+  "backup.completed": "Completed", "backup.duration": "Duration", "backup.total_size": "Total size",
+  "backup.total_file_count": "Files",
+  "pagination.items_per_page": "Items per page", "pagination.range_of_total_items": "{range} of {total} items",
+  "pagination.of_total_pages": "of {total} pages", "pagination.previous_page": "Previous page",
+  "pagination.next_page": "Next page", "pagination.page_number": "Page number",
+  "system_logs.card_title": "System logs", "system_logs.card_description": "Show the logs of {name}",
+  "system_logs.card_button_label": "Go to system logs",
+};
+window.core = {
+  $root: Emitter(),
+  // The real shell routes on the hash of the parent URL; the app polls it and reacts.
+  get $route() {
+    const h = location.hash.replace(/^#/, "") || "/";
+    return { path: h.split("?")[0], fullPath: h };
+  },
+  $router: {
+    push(p) { location.hash = "#" + (typeof p === "string" ? p : p.path); },
+    // absolute URL: a relative one would resolve against the calling iframe's page
+    replace(p) { location.replace(location.href.split("#")[0] + "#" + (typeof p === "string" ? p : p.path)); },
+  },
+  $t(key, params) { let s = SHARED[key] || key; for (const k in params || {}) s = s.replace("{" + k + "}", params[k]); return s; },
+};
+
+// Task results normally arrive from the shell over a websocket.
+let lastSeq = 0;
+async function poll() {
+  try {
+    const events = await (await fetch("/api/events?after=" + lastSeq)).json();
+    for (const ev of events) {
+      lastSeq = Math.max(lastSeq, ev.seq);
+      const ctx = { action: ev.action, extra: { eventId: ev.eventId } };
+      const name = `${ev.action}-${ev.type}-${ev.eventId}`;
+      document.getElementById("log").textContent = "last: " + ev.action + " " + ev.type;
+      if (ev.type === "completed") core.$root.$emit(name, ctx, { output: ev.output });
+      else if (ev.type === "validation-failed") core.$root.$emit(name, ev.errors, ctx);
+      else core.$root.$emit(name, { output: ev.output }, ctx);
+    }
+  } catch (e) { /* server restarting */ }
+  setTimeout(poll, 150);
+}
+poll();
+
+const f = document.createElement("iframe");
+f.src = "/app/index.html";
+document.body.appendChild(f);
+</script>
+</body>
+</html>

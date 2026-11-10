@@ -160,8 +160,10 @@ class GroupwareRenderTests(unittest.TestCase):
 
     def test_groupware_urls_skips_discovery_when_nothing_is_chosen(self):
         with mock.patch.object(render.groupware, "list_candidates") as list_candidates:
-            urls = render.groupware_urls(mock.Mock(), {"dav_module": None, "activesync_module": None}, "mail1", "d")
-        self.assertEqual(urls, {"dav_url": None, "activesync_url": None})
+            urls = render.groupware_urls(
+                mock.Mock(), [{"dav_module": None, "activesync_module": None}], "mail1", "d"
+            )
+        self.assertEqual(urls, {})
         list_candidates.assert_not_called()
 
     def test_groupware_urls_drops_a_module_that_is_gone_with_a_warning(self):
@@ -169,10 +171,85 @@ class GroupwareRenderTests(unittest.TestCase):
         with mock.patch.object(render.groupware, "list_candidates", return_value=candidates), \
                 mock.patch("sys.stderr") as stderr:
             urls = render.groupware_urls(
-                mock.Mock(), {"dav_module": "sogo1", "activesync_module": "sogo1"}, "mail1", "d"
+                mock.Mock(), [{"dav_module": "sogo1", "activesync_module": "sogo1"}], "mail1", "d"
             )
-        self.assertEqual(urls, {"dav_url": "https://s/SOGo/dav/", "activesync_url": None})
+        self.assertEqual(
+            urls, {("dav_url", "sogo1"): "https://s/SOGo/dav/", ("activesync_url", "sogo1"): None}
+        )
         self.assertIn("activesync", "".join(str(c) for c in stderr.write.call_args_list))
+
+    def test_groupware_urls_looks_up_every_domain_choice_once(self):
+        candidates = [
+            {"module_id": "sogo1", "dav_url": "https://s/SOGo/dav/", "activesync_url": "https://s/as"},
+            {"module_id": "nextcloud1", "dav_url": "https://n/remote.php/dav/", "activesync_url": None},
+        ]
+        with mock.patch.object(render.groupware, "list_candidates", return_value=candidates) as list_candidates:
+            urls = render.groupware_urls(
+                mock.Mock(),
+                [
+                    {"dav_module": "sogo1", "activesync_module": None},
+                    {"dav_module": "nextcloud1", "activesync_module": "sogo1"},
+                    {"dav_module": "sogo1", "activesync_module": "sogo1"},
+                ],
+                "mail1",
+                "d",
+            )
+        list_candidates.assert_called_once()
+        self.assertEqual(
+            urls,
+            {
+                ("dav_url", "sogo1"): "https://s/SOGo/dav/",
+                ("dav_url", "nextcloud1"): "https://n/remote.php/dav/",
+                ("activesync_url", "sogo1"): "https://s/as",
+            },
+        )
+
+
+class PerDomainRenderTests(unittest.TestCase):
+    # Per-domain settings (DESIGN.md 12, 0.4): automx uses the section named
+    # after the domain instead of [global], with no inheritance.
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.path = os.path.join(self.tmpdir.name, "automx.conf")
+
+    def test_no_domain_sections_by_default(self):
+        render.write_automx_conf(self.path, "node.example.net", ["a.example", "b.example"], "mail.example.com", True)
+        self.assertEqual(read_ini(self.path).sections(), ["automx", "global"])
+
+    def test_domain_section_is_complete_on_its_own(self):
+        render.write_automx_conf(
+            self.path, "node.example.net", ["a.example", "b.example"], "mail.example.com", True,
+            domain_sections={
+                "b.example": {"display_names": False, "dav_url": "https://s/SOGo/dav/", "activesync_url": None}
+            },
+        )
+        config = read_ini(self.path)
+        self.assertEqual(config.sections(), ["automx", "global", "b.example"])
+        self.assertEqual(config["automx"]["domains"], "a.example, b.example")
+        section = config["b.example"]
+        # The lookup must run in the domain's own section: automx expands
+        # ${login} as each section is read.
+        self.assertEqual(section["backend"], "script")
+        self.assertEqual(section["script"], "/usr/local/bin/automx-ldap-lookup %u %d %s")
+        self.assertEqual(section["imap_server"], "mail.example.com")
+        self.assertEqual(section["smtp_auth_identity"], "${login}")
+        self.assertNotIn("account_name", section)
+        self.assertEqual(section["caldav_url"], "https://s/SOGo/dav/")
+        self.assertNotIn("activesync", section)
+        self.assertNotIn("follow", section)
+        # [global] keeps the defaults.
+        self.assertEqual(config["global"]["account_name"], "${display_name}")
+        self.assertNotIn("caldav", config["global"])
+
+    def test_domain_section_name_is_lowercase(self):
+        # automx lowercases the address's domain before looking it up.
+        render.write_automx_conf(
+            self.path, "node.example.net", ["b.example"], "mail.example.com", True,
+            domain_sections={"B.Example": {"display_names": False, "dav_url": None, "activesync_url": None}},
+        )
+        self.assertIn("b.example", read_ini(self.path).sections())
 
 
 class SigningRenderTests(unittest.TestCase):
@@ -398,6 +475,87 @@ class MainOrchestrationTests(unittest.TestCase):
             },
             **kwargs,
         )
+
+    def _render_two_domains(self, domains_state, settings=None, candidates=()):
+        render.state.save_domains(domains_state)
+        if settings:
+            render.state.save_settings(settings)
+        agent = stub_agent.build(
+            list_service_providers_result=[{"module_id": "mail1"}],
+            tasks_run=lambda agent_id, action, data, **kw: {
+                "get-configuration": {
+                    "exit_code": 0,
+                    "output": {"hostname": "mail.example.com", "user_domain": {"name": "ad.example.com"}},
+                },
+                "list-domains": {"exit_code": 0, "output": [{"domain": "a.example"}, {"domain": "b.example"}]},
+                "get-fqdn": {"exit_code": 0, "output": {"hostname": "node", "domain": "example.net"}},
+            }[action],
+            resolve_agent_id_result="node/1",
+            bound_domain_list=["ad.example.com"],
+            ldap_domain={
+                "host": "127.0.0.1", "port": 3890, "bind_dn": "x",
+                "bind_password": "x", "base_dn": "x", "schema": "ad",
+            },
+        )
+        with mock.patch.object(render, "agent", agent), \
+                mock.patch.object(render.mail, "agent", agent), \
+                mock.patch.object(render.automx_node, "agent", agent), \
+                mock.patch.object(render.groupware, "list_candidates", return_value=list(candidates)), \
+                mock.patch("sys.stdout"):
+            render.main()
+        return read_ini(os.path.join(self.tmpdir.name, "automx.conf"))
+
+    def test_domains_without_overrides_render_as_before(self):
+        config = self._render_two_domains({"a.example": {"enabled": True}, "b.example": {"enabled": True}})
+        self.assertEqual(config.sections(), ["automx", "global"])
+
+    def test_override_gives_the_domain_its_own_section(self):
+        config = self._render_two_domains(
+            {
+                "a.example": {"enabled": True},
+                "b.example": {"enabled": True, "overrides": {"display_names": False}},
+            }
+        )
+        self.assertEqual(config.sections(), ["automx", "global", "b.example"])
+        self.assertIn("account_name", config["global"])
+        self.assertNotIn("account_name", config["b.example"])
+
+    def test_override_equal_to_the_default_needs_no_section(self):
+        config = self._render_two_domains(
+            {"a.example": {"enabled": True}, "b.example": {"enabled": True, "overrides": {"display_names": True}}}
+        )
+        self.assertEqual(config.sections(), ["automx", "global"])
+
+    def test_resolve_aliases_override_needs_no_section(self):
+        # Alias resolution only changes the map refresh-aliases writes.
+        config = self._render_two_domains(
+            {"a.example": {"enabled": True}, "b.example": {"enabled": True, "overrides": {"resolve_aliases": False}}}
+        )
+        self.assertEqual(config.sections(), ["automx", "global"])
+
+    def test_groupware_per_domain(self):
+        candidates = [
+            {"module_id": "sogo1", "dav_url": "https://s/SOGo/dav/", "activesync_url": "https://s/as"},
+        ]
+        config = self._render_two_domains(
+            {
+                "a.example": {"enabled": True},
+                "b.example": {"enabled": True, "overrides": {"dav_module": None, "activesync_module": None}},
+            },
+            settings={"dav_module": "sogo1", "activesync_module": "sogo1"},
+            candidates=candidates,
+        )
+        self.assertEqual(config["global"]["caldav_url"], "https://s/SOGo/dav/")
+        self.assertEqual(config["global"]["activesync_url"], "https://s/as")
+        self.assertNotIn("caldav", config["b.example"])
+        self.assertNotIn("activesync", config["b.example"])
+
+    def test_override_of_a_disabled_domain_is_not_rendered(self):
+        config = self._render_two_domains(
+            {"a.example": {"enabled": True}, "b.example": {"enabled": False, "overrides": {"display_names": False}}}
+        )
+        self.assertEqual(config.sections(), ["automx", "global"])
+        self.assertEqual(config["automx"]["domains"], "a.example")
 
     def test_bind_user_domains_skipped_when_already_bound(self):
         # Real-node finding, 2026-09-22: bind_user_domains() unconditionally

@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2026 Dan Brown
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Sets the overrides of one domain (DESIGN.md 12, 0.4): the per-domain
+# values of display_names, resolve_aliases, dav_module and
+# activesync_module. The given overrides replace the domain's previous
+# ones; a setting left out follows the instance-wide default again. The
+# domain's enabled flag is left as it is, and a disabled domain can have
+# overrides stored for when it is enabled.
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.environ["AGENT_INSTALL_DIR"], "pypkg"))
+
+import agent
+from automx import groupware, mail, reconcile, state
+
+data = json.load(sys.stdin)
+domain = data["domain"]
+overrides = data["overrides"]
+
+
+def fail(errors):
+    agent.set_status("validation-failed")
+    json.dump(errors, fp=sys.stdout)
+    sys.exit(3)
+
+
+rdb = agent.redis_connect(use_replica=True)
+try:
+    mail_module_id, _hostname, user_domain, mail_domain_names = mail.get_instance_info(rdb)
+except (mail.MailNotFound, mail.MailNotConfigured):
+    mail_module_id = user_domain = None
+    mail_domain_names = set()
+
+# Same rule as set-domains: a domain of the mail module, or one already
+# known here (an orphan keeps its overrides and can still have them changed).
+if domain not in mail_domain_names and domain not in state.load_domains():
+    fail(
+        [
+            {
+                "field": "domain",
+                "parameter": "domain",
+                "value": domain,
+                "error": "domain_not_found",
+                "message": "not a domain of the configured mail instance",
+            }
+        ]
+    )
+
+# A groupware module chosen for this domain must provide that service for
+# the mail instance, as in configure-module. Only checked when one is set.
+chosen = {k: overrides.get(k) for k in groupware.SERVICE_OF_SETTING}
+if any(chosen.values()):
+    candidates = groupware.list_candidates(rdb, mail_module_id, user_domain) if mail_module_id else []
+    errors = groupware.unavailable(candidates, chosen)
+    if errors:
+        fail(errors)
+
+with reconcile.lock():
+    domains_state = state.load_domains()
+    entry = domains_state.setdefault(domain, {"enabled": False})
+    if overrides:
+        entry["overrides"] = overrides
+    else:
+        entry.pop("overrides", None)
+    state.save_domains(domains_state)
+    reconcile.reconcile_locked(rdb)
+
+settings = state.load_settings()
+json.dump(
+    {
+        "domain": domain,
+        "overrides": state.domain_overrides(domains_state[domain]),
+        "settings": state.effective_settings(settings, domains_state[domain]),
+    },
+    fp=sys.stdout,
+)

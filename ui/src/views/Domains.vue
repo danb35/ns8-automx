@@ -86,6 +86,12 @@
                     kind="warm-gray"
                     class="mg-left-sm"
                   />
+                  <NsTag
+                    v-if="Object.keys(row.overrides).length"
+                    :label="$t('domains.custom_settings')"
+                    kind="purple"
+                    class="mg-left-sm"
+                  />
                 </cv-data-table-cell>
                 <cv-data-table-cell>
                   <div class="toggle-with-loading">
@@ -141,6 +147,12 @@
                         :label="$t('domains.dns_status')"
                       />
                     </cv-overflow-menu-item>
+                    <cv-overflow-menu-item @click="showDomainSettings(row)">
+                      <NsMenuItem
+                        :icon="Settings20"
+                        :label="$t('domains.domain_settings')"
+                      />
+                    </cv-overflow-menu-item>
                     <cv-overflow-menu-item
                       :disabled="!row.enabled"
                       @click="showProfileLink(row)"
@@ -171,6 +183,13 @@
       :domain="current ? current.domain : ''"
       @hide="isProfileLinkShown = false"
     />
+    <DomainSettingsModal
+      :isShown="isDomainSettingsShown"
+      :domain="current ? current.domain : ''"
+      :overrides="current ? current.overrides : {}"
+      @hide="isDomainSettingsShown = false"
+      @changed="load"
+    />
   </div>
 </template>
 
@@ -185,10 +204,11 @@ import {
 import AutomxService from "../mixins/automx";
 import DnsStatusModal from "../components/DnsStatusModal.vue";
 import ProfileLinkModal from "../components/ProfileLinkModal.vue";
+import DomainSettingsModal from "../components/DomainSettingsModal.vue";
 
 export default {
   name: "Domains",
-  components: { DnsStatusModal, ProfileLinkModal },
+  components: { DnsStatusModal, ProfileLinkModal, DomainSettingsModal },
   mixins: [
     AutomxService,
     QueryParamService,
@@ -209,6 +229,7 @@ export default {
       current: null,
       isDnsStatusShown: false,
       isProfileLinkShown: false,
+      isDomainSettingsShown: false,
       notice: { kind: "success", title: "", text: "" },
       loading: { load: false, toggle: "" },
       error: { load: "" },
@@ -340,6 +361,10 @@ export default {
       // "Configured".
       this.notice = { kind: "success", title: "", text: "" };
       this.load();
+    },
+    showDomainSettings(row) {
+      this.current = row;
+      this.isDomainSettingsShown = true;
     },
     showProfileLink(row) {
       this.current = row;

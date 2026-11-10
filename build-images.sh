@@ -72,6 +72,19 @@ buildah run "${smokecontainer}" -- \
     automx render autodiscover --config /etc/automx/automx.conf --email "${smokeemail}" --schema outlook >/dev/null
 buildah run "${smokecontainer}" -- \
     automx render mobileconfig --config /etc/automx/automx.conf --email "${smokeemail}" >/dev/null
+# Per-domain settings (DESIGN.md 12): a domain with its own section gets
+# that section's profile, and the other domain keeps [global]'s.
+buildah run "${smokecontainer}" -- \
+    automx config validate --config /etc/automx/automx.conf --domain other.ci-smoke-test.test
+buildah run "${smokecontainer}" -- \
+    automx render autoconfig --config /etc/automx/automx.conf --email "dan@other.ci-smoke-test.test" \
+    | grep -q "groupware.ci-smoke-test.test/SOGo/dav/"
+if buildah run "${smokecontainer}" -- \
+    automx render autoconfig --config /etc/automx/automx.conf --email "${smokeemail}" \
+    | grep -q "groupware.ci-smoke-test.test"; then
+    echo "[global]'s profile has the groupware URL of another domain's section" >&2
+    exit 1
+fi
 buildah rm "${smokecontainer}" >/dev/null
 
 buildah config --entrypoint=/ \

@@ -1,6 +1,6 @@
 # ns8-automx: Design
 
-Status: v3 (0.3.0), 2026-11-09. Audience: the developer (human or agent) implementing the module. Read `AGENTS.md`, `AGENTS-backend.md` and `AGENTS-frontend.md` first; this document assumes their conventions (pinned image tags, authorizations as labels in `build-images.sh`, Renovate, Robot tests, Vue 2 + Carbon UI).
+Status: v4 (0.4.0), 2026-11-10. Audience: the developer (human or agent) implementing the module. Read `AGENTS.md`, `AGENTS-backend.md` and `AGENTS-frontend.md` first; this document assumes their conventions (pinned image tags, authorizations as labels in `build-images.sh`, Renovate, Robot tests, Vue 2 + Carbon UI).
 
 Items marked **VERIFY** are things the design depends on that were not confirmed from documentation while writing this. Resolve each before or during implementation and record the answer in this file.
 
@@ -614,9 +614,11 @@ Not separately broken out in this pass: whether Outlook's Autodiscover specifica
 
 ## 12. Later phases
 
-### Planned for 0.4: per-domain settings
+### 0.4: per-domain settings
 
-Today every setting applies to all enabled domains at once: `automx.conf` has one `[global]` section, and only the `domains` allowlist varies (4.3). 0.4 makes most of them per domain, so for example one domain can hand out display names and SOGo calendars while another hands out neither. In scope:
+**Implemented 2026-11-10** (branch `feat/per-domain-settings`); see "Implementation" below. Not yet tested on a node or with real clients.
+
+Before 0.4 every setting applied to all enabled domains at once: `automx.conf` has one `[global]` section, and only the `domains` allowlist varies (4.3). 0.4 makes most of them per domain, so for example one domain can hand out display names and SOGo calendars while another hands out neither. In scope:
 
 - `display_names`: whether a domain's responses include the user's display name (the disclosure trade-off in 8 is a per-domain decision).
 - `resolve_aliases`: whether a domain's aliases resolve to the owner's login.
@@ -625,11 +627,11 @@ Today every setting applies to all enabled domains at once: `automx.conf` has on
 
 Each keeps its current instance-wide value as the default, and a domain can override it. An update from 0.3.x keeps every domain on today's values, so nothing a client receives changes until the administrator sets an override.
 
-Probably staying instance-wide: `service_host` (one name for the SRV/CNAME target and the node-FQDN Autodiscover route, 5.1/4.4), `http2https` (could move per domain, since routes are already per domain, but no need has come up), and `sign_profiles` (one certificate, the service host's).
+Staying instance-wide: `service_host` (one name for the SRV/CNAME target and the node-FQDN Autodiscover route, 5.1/4.4), `http2https` (could move per domain, since routes are already per domain, but no need has come up), and `sign_profiles` (one certificate, the service host's).
 
-To work out before implementing:
+Worked out before implementing:
 
-- **RESOLVED (2026-11-10, read of `croessner/automx` `src/automx/configuration.py` at `v3.0.0-beta.5`; not yet checked with `config validate`):** automx supports a section per domain, and every key we use is allowed in it.
+- **RESOLVED (2026-11-10, read of `croessner/automx` `src/automx/configuration.py` at `v3.0.0-beta.5`; `config validate` and `render autoconfig` of a domain section run in the build smoke check, see below):** automx supports a section per domain, and every key we use is allowed in it.
   - `resolve()` uses the section named exactly after the address's domain (`[example.com]`) if there is one, else `[global]`. It replaces `[global]`, with no inheritance or merge. Matching is exact: `[example.com]` does not cover `sub.example.com`.
   - `backend = global` in a domain section hands the whole request to `[global]` and ignores the section's own keys, so it is no use for overrides.
   - `follow = <section>` continues with another named section after the current one (chains up to 16 deep, cycles refused). A plain backend there overwrites services the earlier section set; an `*_append` backend (`static_append`, `script_append`) only adds protocols not set yet.
@@ -643,6 +645,26 @@ To work out before implementing:
 - Storage: per-domain overrides belong next to the `enabled` flag in `state/domains.json`, which is already backed up; `set-domains` (or a new action) takes them, and `get-domains` returns the effective values.
 - UI: per-domain values in the Domains table (a row action opening the domain's settings), with Settings keeping the defaults.
 - The alias map (`state/aliases/aliases.json`) already lists aliases per domain; with `resolve_aliases` per domain, `refresh-aliases` leaves out the domains where it is off.
+
+Implementation:
+
+- **Storage.** `state/domains.json` entries gain an optional `overrides` object: `{"enabled": true, "overrides": {"display_names": false, "dav_module": null}}`. A key that is absent follows the instance-wide value in `settings.json`, so `null` for a groupware module means none for that domain, not the default. Entries written before 0.4 have no `overrides` and follow the defaults, so an update needs no migration and changes nothing a client receives. Overrides are kept while a domain is disabled or orphaned. `state.effective_settings()` and `state.domain_overrides()` are the only readers. Backed up with `domains.json`, as before.
+- **Action.** A new `set-domain-settings` (`{domain, overrides}`) rather than an extension of `set-domains`, whose input is a map of enable flags for several domains at once. The given overrides replace the previous ones; `{}` removes them. It accepts a domain of the mail module or one already in `domains.json` (as `set-domains` does), checks a chosen groupware module with the same `groupware.unavailable()` as `configure-module` (`groupware_not_available`), and stores and reconciles under `reconcile.lock()`. `set-domains` now re-reads `domains.json` under the lock, so a concurrent `set-domain-settings` is not lost. `get-domains` returns each domain's `overrides` and its effective `settings`.
+- **Renderer.** `[global]` holds the defaults. A domain gets its own section only when its effective display-name and groupware settings render differently from the defaults, so an instance without overrides, or with overrides equal to the defaults, renders exactly as before. Each domain section is complete on its own (`profile_section()`, the same builder as `[global]`), with no `follow`. Section names are lowercased, since automx lowercases the address's domain before looking it up. Groupware candidates are listed once per render for all the modules chosen anywhere; a module that is gone is left out of each section that names it, with one warning.
+- **Aliases.** `refresh-aliases` maps only the enabled domains whose effective `resolve_aliases` is on, and asks the mail module nothing when none is. `resolve_aliases` never needs a section of its own.
+- **UI.** The Domains row menu has **Domain settings**, a dialog with one select per setting: Default (showing the current default), on/off or a provider, and None for the providers. A module the domain names that is no longer a provider stays listed as "no longer available", so the select never silently shows something else. A **Custom settings** tag marks domains with overrides. Settings groups the four under "Defaults for all domains", after the instance-wide signing toggle.
+- **Tests.** Unit tests for the state helpers, `groupware.unavailable()`, `set-domain-settings`, `refresh-aliases`, and the renderer's per-domain sections through `main()`. The build smoke check (`build-images.sh`) adds a second domain with its own section to `tests/fixtures/synthetic-automx.conf`, validates it with `automx config validate`, and checks that only that domain's Autoconfig carries its CalDAV URL, which confirms the section-per-domain behavior read from the source against the built image.
+
+**LAN test cluster (2026-11-10, Rocky 9 node 1, `automx33` on `mail1`/OpenLDAP `2v6.in`, with SOGo, WebTop and Nextcloud):** updating from 0.3.0 to the branch image left Autoconfig, MobileSync and the Apple profile contents byte-identical for a user and an alias, and `automx.conf` with `[global]` only. A temporary mail domain `perdomain.test` (users added, plus an alias `fred.flintstone@` → `fred`) was enabled next to `2v6.in`, and the responses were read over all three protocols from the container:
+
+- With overrides `display_names: false`, `resolve_aliases: false`, `dav_module: nextcloud1`, `activesync_module: null` (defaults on, SOGo, WebTop): `perdomain.test` got a self-contained section and handed out no display name (the Apple profile's account name falls back to the address), Nextcloud's DAV URL in Autoconfig and the profile, no ActiveSync (MobileSync answers error 602), and its alias as the bare address, dropped from the map by the refresh the reconcile starts. `2v6.in` was unchanged. `set-domain-settings` took about 25 s, the time of one reconcile.
+- The reverse, with the defaults turned off and WebTop for both services: overrides turning display names and aliases on for `perdomain.test` brought both back for it alone, and it inherited WebTop's URLs; only its alias was in the map.
+- Refused with nothing stored: Nextcloud as ActiveSync provider (`groupware_not_available`), an unknown domain (`domain_not_found`) and an instance-wide key (schema). Disabling the domain kept its overrides and dropped its section; enabling it again brought both back.
+- Seen, as before 0.4: the alias map refresh after a change runs without blocking, so for a few seconds after a change that turns alias resolution on, an alias still gets the fallback (bare address, and no display name since an alias is not in LDAP).
+
+The Domain settings dialog and the Settings page were checked in a browser on the same instance by the developer and look right.
+
+**`tests/integration` (2026-11-10, same cluster, branch image):** all 15 tests pass, with fred, the alias `fred.flintstone@2v6.in` and dnshelper present. Two are new for 0.4: `test_05c` turns display names off for the mail domain alone (its own section in `automx.conf`, no display name in Autoconfig), removes the override (section and name back), and checks that an unknown domain is refused; `test_10` sets overrides before the backup and finds them on the instance restored alongside the original. `automx33` was removed for the run (the suite needs node 1 without an automx instance) and reinstalled from the branch image as `automx38` with its settings, mail server and port, and Autoconfig for a user and an alias was byte-identical to what `automx33` served under 0.3.0. A dnshelper access rule naming `module/automx33` no longer matches the new instance.
 
 ### Other later phases
 

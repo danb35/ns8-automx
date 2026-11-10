@@ -1,0 +1,60 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "set-domain-settings output",
+    "$id": "http://nethserver.org/json-schema/task/output/automx/set-domain-settings",
+    "description": "The domain's stored overrides and the settings that now apply to it (overrides on top of the instance-wide defaults).",
+    "type": "object",
+    "required": [
+        "domain",
+        "overrides",
+        "settings"
+    ],
+    "additionalProperties": false,
+    "definitions": {
+        "domain-settings": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "display_names": {
+                    "type": "boolean"
+                },
+                "resolve_aliases": {
+                    "type": "boolean"
+                },
+                "dav_module": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "activesync_module": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            }
+        }
+    },
+    "properties": {
+        "domain": {
+            "type": "string"
+        },
+        "overrides": {
+            "$ref": "#/definitions/domain-settings"
+        },
+        "settings": {
+            "allOf": [
+                {
+                    "$ref": "#/definitions/domain-settings"
+                }
+            ],
+            "required": [
+                "display_names",
+                "resolve_aliases",
+                "dav_module",
+                "activesync_module"
+            ]
+        }
+    }
+}

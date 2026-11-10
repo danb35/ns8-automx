@@ -77,6 +77,12 @@ tested on a two-node cluster with a mail server on each node (Rocky 9 and Debian
 switching between them, a second and third instance competing for them, and a restore, and on the
 public node with its real certificate and DNS. See DESIGN.md 3.2 and decisions #15 and #16.
 
+0.4.0 lets each domain have its own display names, alias resolution, and calendar, contacts and
+ActiveSync providers, set under **Domain settings** on the Domains page, with Settings holding the
+defaults. An instance without per-domain settings serves exactly what it did before. It was tested on
+the two-node LAN cluster with SOGo, WebTop and Nextcloud, reading the Autoconfig, MobileSync and Apple
+profile answers for a user and an alias on two domains with different settings. See DESIGN.md 12.
+
 Not in scope: PACC, Autodiscover v2, several mail instances at once. See DESIGN.md
 section 2 and 12.
 
@@ -95,7 +101,9 @@ section 2 and 12.
 - **One instance per node** (`org.nethserver.max-per-node=1`): every instance publishes the same
   Autodiscover paths on the node's FQDN. The Software center and `add-module` refuse a second one
   on a node, for an install, a clone or a restore. `add-module --force` skips the check for a test.
-- **Settings apply to all enabled domains.** Per-domain settings are planned (DESIGN.md 12).
+- **Some settings apply to all domains.** Display names, alias resolution and the groupware
+  providers can be set per domain; the mail server, service host, HTTP redirection and profile
+  signing apply to every domain of an instance.
 - **Something else answering on the bare mail domain can take Outlook first.** Outlook asks
   `https://<domain>/autodiscover/autodiscover.xml` before `autodiscover.<domain>`, so if WebTop or
   any other web service answers there, Outlook uses that answer and never reaches automx. That
@@ -164,8 +172,9 @@ argument-less ones, since the admin UI sends no payload.
 |---|---|
 | `configure-module` | Settings: the mail server (`mail_server`, a mail module's UUID), service host override (default: this node's own FQDN), `http2https` default, `display_names`, `resolve_aliases` and `sign_profiles` toggles, and the groupware modules (`dav_module`, `activesync_module`) whose endpoints are published. Refuses a mail server another automx instance uses. Starts the service once at least one domain is enabled. |
 | `get-configuration` | Settings plus a summary (enabled domain count, mail hostname, user domain, dnshelper presence, signing status) for the Status page, the cluster's mail servers with any other instance using each, and the groupware modules that can provide CalDAV/CardDAV or ActiveSync for each. |
-| `get-domains` | The mail module's domains merged with the module's own enable/disable state: enabled flag, route status, DNS status per record, orphan flag. |
+| `get-domains` | The mail module's domains merged with the module's own enable/disable state: enabled flag, the domain's own settings and the settings that apply to it, route status, DNS status per record, orphan flag. |
 | `set-domains` | Enable or disable one or more domains; applies Traefik routes, renders `automx.conf`, validates it, reloads the service. |
+| `set-domain-settings` | For one domain: its own `display_names`, `resolve_aliases`, `dav_module` and `activesync_module`, replacing any it had. A setting left out follows `configure-module`'s value; `null` for a groupware module means none for that domain. Re-renders and reloads. |
 | `check-dns` | Recompute DNS status for one domain (through dnshelper if it covers the zone, otherwise by asking the zone's authoritative DNS servers). Also creates a domain's routes once its CNAME records are in place. |
 | `apply-dns` | For one domain: `create` (missing records) or `overwrite` (conflicting ones), each after a `dry_run` preview. dnshelper only. |
 | `get-dns-plan` | The exact records to create, for the manual path (no dnshelper, or a zone it doesn't manage). |
@@ -174,6 +183,10 @@ argument-less ones, since the admin UI sends no payload.
 
 ## How it fits together
 
+- **Per-domain settings**: `[global]` in `automx.conf` carries the defaults from Settings, and a
+  domain whose own settings change what it hands out gets a complete section of its own, which
+  automx uses instead of `[global]`. Alias resolution needs no section: `refresh-aliases` leaves
+  out the aliases of domains where it is off. See DESIGN.md 12.
 - **Mail server**: an instance serves one mail module, stored as `MAIL_SERVER` (its module
   UUID) in the environment, where other instances can see it and refuse the same one. With
   nothing stored, the nearest mail module no other instance uses is the default, recorded once
@@ -269,8 +282,10 @@ a clone on the same node have been tested on a real node; a move to another node
 ## Admin UI
 
 Vue 2 with Carbon and `ns8-ui-lib`, in `ui/`. Three pages besides About: Status, Domains
-(the DNS status dialog and the profile-link dialog live here), and Settings. See the
-[user guide](docs/USER-GUIDE.md) for what each one does.
+(the DNS status, domain settings and profile-link dialogs live here), and Settings. See the
+[user guide](docs/USER-GUIDE.md) for what each one does. `ui/dev/` has a harness that runs the built
+UI outside NS8 with canned data, and the script that takes the user guide's screenshots (see its
+[README](ui/dev/README.md)).
 
 ```bash
 cd ui && yarn install && yarn build

@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Read/write helpers for the module's own state (DESIGN.md 4.2):
-# state/domains.json ({"<domain>": {"enabled": bool}}) and state/settings.json.
+# state/domains.json ({"<domain>": {"enabled": bool, "overrides": {...}}})
+# and state/settings.json.
 # Both are backed up (imageroot/etc/state-include.conf); automx.conf and
 # ldap-lookup.json, which are pure functions of these plus live discovery
 # data, are not (see imageroot/bin/render-automx-conf).
@@ -61,6 +62,31 @@ UPGRADE_DEFAULTS = {
 }
 
 
+# Settings a domain can override (DESIGN.md 12, 0.4). The instance-wide
+# value in settings.json is the default; a domain's overrides live in its
+# domains.json entry as {"enabled": ..., "overrides": {<key>: <value>}}. A
+# key that is absent inherits the default, so null for dav_module or
+# activesync_module means "none for this domain", not "inherit". An entry
+# without "overrides" (every entry written before 0.4) follows the
+# defaults, so an update changes nothing a client receives.
+PER_DOMAIN_SETTINGS = ("display_names", "resolve_aliases", "dav_module", "activesync_module")
+
+
+def domain_overrides(flags):
+    """The overrides stored for one domains.json entry, limited to the
+    settings a domain can override."""
+    overrides = (flags or {}).get("overrides") or {}
+    return {k: v for k, v in overrides.items() if k in PER_DOMAIN_SETTINGS}
+
+
+def effective_settings(settings, flags):
+    """The per-domain settings that apply to one domain: its overrides on
+    top of the instance-wide defaults."""
+    result = {k: settings.get(k, DEFAULT_SETTINGS[k]) for k in PER_DOMAIN_SETTINGS}
+    result.update(domain_overrides(flags))
+    return result
+
+
 def _load_json(path, default):
     try:
         with open(path, encoding="utf-8") as f:
@@ -77,7 +103,8 @@ def _atomic_write_json(path, obj):
 
 
 def load_domains():
-    """{"<domain>": {"enabled": bool}}, empty if never written."""
+    """{"<domain>": {"enabled": bool, "overrides": {...}}}, empty if never
+    written. "overrides" is optional (PER_DOMAIN_SETTINGS)."""
     return _load_json(_domains_path(), {})
 
 
