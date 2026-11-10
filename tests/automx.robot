@@ -82,6 +82,20 @@ Check if set-domains rejects a domain the mail module doesn't have
     ...    return_rc=True
     Should Not Be Equal As Integers    ${rc}  0
 
+Check if set-domain-settings rejects a domain the mail module doesn't have
+    ${rc} =    Execute Command
+    ...    api-cli run module/${module_id}/set-domain-settings --data '{"domain":"example.test","overrides":{"display_names":false}}'
+    ...    return_rc=True  return_stdout=False
+    Should Not Be Equal As Integers    ${rc}  0
+
+Check if set-domain-settings rejects an unknown setting
+    # Only the four per-domain settings can be overridden (DESIGN.md 12);
+    # the input schema refuses the rest.
+    ${rc} =    Execute Command
+    ...    api-cli run module/${module_id}/set-domain-settings --data '{"domain":"example.test","overrides":{"service_host":"x.example.test"}}'
+    ...    return_rc=True  return_stdout=False
+    Should Not Be Equal As Integers    ${rc}  0
+
 Check if automx service is healthy
     # get-status is core's own inherited action; unlike our own actions it
     # was never given the "accept {} too" treatment (DESIGN.md 6.1), so its

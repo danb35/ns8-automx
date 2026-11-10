@@ -175,5 +175,28 @@ class ListCandidatesTests(unittest.TestCase):
         self.assertIsNone(groupware.find(candidates, "sogo2", "dav_url"))
 
 
+class UnavailableTests(unittest.TestCase):
+    CANDIDATES = [
+        {"module_id": "sogo1", "dav_url": "https://s/SOGo/dav/", "activesync_url": None},
+    ]
+
+    def test_none_chosen_is_valid(self):
+        self.assertEqual(groupware.unavailable([], {"dav_module": None}), [])
+        self.assertEqual(groupware.unavailable([], {}), [])
+
+    def test_provider_of_the_service_is_valid(self):
+        self.assertEqual(groupware.unavailable(self.CANDIDATES, {"dav_module": "sogo1"}), [])
+
+    def test_module_without_the_service_is_refused(self):
+        errors = groupware.unavailable(self.CANDIDATES, {"dav_module": "nextcloud1", "activesync_module": "sogo1"})
+        self.assertEqual(
+            [(e["parameter"], e["value"], e["error"]) for e in errors],
+            [
+                ("dav_module", "nextcloud1", "groupware_not_available"),
+                ("activesync_module", "sogo1", "groupware_not_available"),
+            ],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

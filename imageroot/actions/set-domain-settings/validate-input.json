@@ -1,0 +1,63 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "set-domain-settings input",
+    "$id": "http://nethserver.org/json-schema/task/input/automx/set-domain-settings",
+    "description": "Set the overrides of one domain (DESIGN.md 12). The given overrides replace the domain's previous ones: a setting left out follows the instance-wide default from configure-module again, and an empty object removes every override. For dav_module and activesync_module, null means none for this domain, not the default.",
+    "examples": [
+        {
+            "domain": "example.com",
+            "overrides": {
+                "display_names": false,
+                "dav_module": "sogo1",
+                "activesync_module": null
+            }
+        },
+        {
+            "domain": "example.org",
+            "overrides": {}
+        }
+    ],
+    "type": "object",
+    "required": [
+        "domain",
+        "overrides"
+    ],
+    "additionalProperties": false,
+    "properties": {
+        "domain": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Mail domain"
+        },
+        "overrides": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "display_names": {
+                    "type": "boolean",
+                    "title": "Include display names"
+                },
+                "resolve_aliases": {
+                    "type": "boolean",
+                    "title": "Resolve mail aliases"
+                },
+                "dav_module": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "title": "CalDAV/CardDAV provider",
+                    "pattern": "^[a-z][a-z0-9-]*[0-9]+$"
+                },
+                "activesync_module": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "title": "ActiveSync provider",
+                    "pattern": "^[a-z][a-z0-9-]*[0-9]+$"
+                }
+            }
+        }
+    }
+}

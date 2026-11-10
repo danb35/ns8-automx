@@ -42,6 +42,8 @@ for entry in domains_lib.merge(mail_domain_names, domains_state):
     domains_out.append(
         {
             **entry,
+            "overrides": state.domain_overrides(domains_state.get(entry["domain"])),
+            "settings": state.effective_settings(settings, domains_state.get(entry["domain"])),
             "route_status": route_status,
             "dns": dns_status,
         }

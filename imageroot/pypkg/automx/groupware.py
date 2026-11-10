@@ -136,3 +136,19 @@ def find(candidates, module_id, service):
         if candidate["module_id"] == module_id:
             return candidate[service]
     return None
+
+
+# Setting name -> the candidate field holding that service's URL.
+SERVICE_OF_SETTING = {"dav_module": "dav_url", "activesync_module": "activesync_url"}
+
+
+def unavailable(candidates, choices):
+    """NS8 validation errors for each chosen module in choices
+    ({"dav_module": id or None, "activesync_module": id or None}) that is
+    not a usable provider of that service among candidates. None or a
+    missing key means no module, which is always valid."""
+    return [
+        {"field": setting, "parameter": setting, "value": choices[setting], "error": "groupware_not_available"}
+        for setting, service in SERVICE_OF_SETTING.items()
+        if choices.get(setting) and find(candidates, choices[setting], service) is None
+    ]

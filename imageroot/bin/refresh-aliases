@@ -42,12 +42,18 @@ def write_map(alias_map):
 
 
 def build():
-    if not state.load_settings()["resolve_aliases"]:
-        return {}
+    settings = state.load_settings()
+    domains_state = state.load_domains()
     rdb = agent.redis_connect(use_replica=True)
     mail_module_id, _hostname, _user_domain, mail_domain_names = mail.get_instance_info(rdb)
-    enabled = domains.enabled_usable(mail_domain_names, state.load_domains())
-    if not enabled:
+    # resolve_aliases can be set per domain (DESIGN.md 12, 0.4): only the
+    # enabled domains where it is on get their aliases in the map.
+    wanted = [
+        domain
+        for domain in domains.enabled_usable(mail_domain_names, domains_state)
+        if state.effective_settings(settings, domains_state.get(domain))["resolve_aliases"]
+    ]
+    if not wanted:
         return {}
     response = agent.tasks.run(
         f"module/{mail_module_id}",
@@ -56,7 +62,7 @@ def build():
         extra={"isNotificationHidden": True},
     )
     agent.assert_exp(response["exit_code"] == 0, "mail list-addresses failed")
-    return aliases.build_map(response["output"]["addresses"], enabled)
+    return aliases.build_map(response["output"]["addresses"], wanted)
 
 
 def main():

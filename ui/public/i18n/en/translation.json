@@ -37,6 +37,8 @@
     "enabled": "Enabled",
     "updating": "Updating… this can take up to a minute",
     "get_profile_link": "Get profile link",
+    "domain_settings": "Domain settings",
+    "custom_settings": "Custom settings",
     "dns_status": "DNS status",
     "col_domain": "Domain",
     "col_enabled": "Enabled",
@@ -90,6 +92,13 @@
     "no_auth_title": "No authentication",
     "no_auth_description": "This link and form are unauthenticated by design, like the autoconfiguration protocols themselves: anyone who knows an address can request its mail settings."
   },
+  "domain_settings": {
+    "title": "Settings for {domain}",
+    "intro": "Choose what clients asking about this domain receive. A setting left at Default follows the Settings page, and changes with it.",
+    "default": "Default ({value})",
+    "not_available": "{module} (no longer available)",
+    "save": "Save"
+  },
   "settings": {
     "title": "Settings",
     "configure_instance": "Configure {instance}",
@@ -111,6 +120,8 @@
     "display_names_notice_description": "Autoconfiguration endpoints answer any request, without a password. With display names on, a display name is included for whichever address is asked about, along with the mail server names; with alias resolution on, the login behind an alias is included too. Turn them off to reduce what an anonymous request reveals, at the cost of clients showing the raw address instead of a name, or asking users of an alias to type their login.",
     "enabled": "Enabled",
     "disabled": "Disabled",
+    "domain_defaults_title": "Defaults for all domains",
+    "domain_defaults_description": "Display names, alias resolution and the calendar, contacts and ActiveSync providers apply to every domain, unless a domain overrides them under Domain settings on the Domains page.",
     "configuring": "Configuring",
     "groupware_title": "Calendars, contacts and ActiveSync",
     "groupware_description": "Also publish the CalDAV/CardDAV or ActiveSync endpoint of a groupware app, so clients set those up along with mail. Users log in with the same user name as for mail.",
@@ -159,7 +170,8 @@
     "apply-dns": "Update DNS records",
     "get-dns-plan": "Get DNS plan",
     "get-dnshelper-status": "Get dnshelper status",
-    "get-profile-link": "Get profile link"
+    "get-profile-link": "Get profile link",
+    "set-domain-settings": "Update domain settings"
   },
   "error": {
     "error": "Error",

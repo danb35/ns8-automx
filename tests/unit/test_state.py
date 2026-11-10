@@ -66,5 +66,35 @@ class SettingsDefaultsTests(unittest.TestCase):
         self.assertTrue(state.load_settings()["resolve_aliases"])
 
 
+class PerDomainSettingsTests(unittest.TestCase):
+    # DESIGN.md 12, 0.4: a domain's overrides on top of the instance-wide
+    # defaults.
+
+    SETTINGS = dict(state.DEFAULT_SETTINGS, dav_module="sogo1", display_names=True)
+
+    def test_entry_without_overrides_follows_the_defaults(self):
+        # Every entry written before 0.4.
+        self.assertEqual(
+            state.effective_settings(self.SETTINGS, {"enabled": True}),
+            {"display_names": True, "resolve_aliases": True, "dav_module": "sogo1", "activesync_module": None},
+        )
+
+    def test_missing_entry_follows_the_defaults(self):
+        self.assertEqual(state.effective_settings(self.SETTINGS, None)["dav_module"], "sogo1")
+
+    def test_override_wins_and_null_means_none(self):
+        effective = state.effective_settings(
+            self.SETTINGS, {"enabled": True, "overrides": {"display_names": False, "dav_module": None}}
+        )
+        self.assertFalse(effective["display_names"])
+        self.assertIsNone(effective["dav_module"])
+        self.assertTrue(effective["resolve_aliases"])
+
+    def test_only_per_domain_settings_can_be_overridden(self):
+        flags = {"overrides": {"service_host": "x.example", "sign_profiles": True, "resolve_aliases": False}}
+        self.assertEqual(state.domain_overrides(flags), {"resolve_aliases": False})
+        self.assertNotIn("service_host", state.effective_settings(self.SETTINGS, flags))
+
+
 if __name__ == "__main__":
     unittest.main()

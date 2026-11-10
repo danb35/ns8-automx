@@ -216,6 +216,17 @@ Open **Settings**.
 - **Redirect HTTP to HTTPS** — on by default. Thunderbird and most current clients try
   HTTPS first anyway; leave this on unless you have a specific reason to serve plain
   HTTP.
+- **Sign Apple profiles** — off by default. Signs the profiles users download with this
+  server's own certificate for the service host: the one Let's Encrypt issues, or one you
+  uploaded in the certificate settings, which takes precedence. iPhones and Macs then show
+  the profiles as verified instead of unsigned. Below the switch, Settings says whether
+  profiles are actually being signed and, if not, why (for example, no certificate yet, or
+  an uploaded certificate with an ECDSA key, which can't be used for signing). Turning it
+  on places that certificate's private key inside the automx container.
+
+Under **Defaults for all domains**, the next settings apply to every enabled domain, unless
+a domain has its own value (see [Settings for one domain](#settings-for-one-domain)):
+
 - **Include display names** — on by default. automx looks up the display name for
   whichever address a client asks about and includes it in the response, which is
   normal, expected client behavior. Since these endpoints answer *any* request without a
@@ -230,13 +241,6 @@ Open **Settings**.
   resolved; its users still type their own login. Like display names, this tells anyone
   who asks which login is behind an alias; turn it off if you'd rather not. New or changed
   aliases are picked up within 15 minutes.
-- **Sign Apple profiles** — off by default. Signs the profiles users download with this
-  server's own certificate for the service host: the one Let's Encrypt issues, or one you
-  uploaded in the certificate settings, which takes precedence. iPhones and Macs then show
-  the profiles as verified instead of unsigned. Below the switch, Settings says whether
-  profiles are actually being signed and, if not, why (for example, no certificate yet, or
-  an uploaded certificate with an ECDSA key, which can't be used for signing). Turning it
-  on places that certificate's private key inside the automx container.
 
 ### Calendars, contacts and ActiveSync
 
@@ -259,6 +263,25 @@ An app is only offered when it is set up with a host name and uses the same user
 as the mail server. ActiveSync also requires the app (SOGo or WebTop; Nextcloud has none)
 to use this mail server, and SOGo only offers what is switched on in its own settings.
 Nextcloud must run on the same node as automx.
+
+### Settings for one domain
+
+On the **Domains** page, a domain's overflow menu offers **Domain settings**. There you can
+give that domain its own value for any of the four defaults: **Include display names**,
+**Resolve mail aliases**, **CalDAV/CardDAV provider** and **ActiveSync provider**. For
+example, one domain can hand out SOGo calendars and display names while another hands out
+neither.
+
+Each setting starts at **Default**, which follows the Settings page and changes when you
+change it there; the choice in brackets shows what that is now. For the providers,
+**None** turns the service off for this domain even when the default has one. A domain
+with its own settings shows a **Custom settings** tag in the table. Setting everything
+back to **Default** removes its own settings.
+
+A domain keeps its own settings while disabled, and when it is enabled again. If a chosen
+app later stops providing the service (it is removed, or switched to another mail server),
+that domain gets no calendar or ActiveSync settings, and its dialog shows the app as no
+longer available; mail settings keep working.
 
 ## Sharing a download link with your users
 

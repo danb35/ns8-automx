@@ -79,6 +79,35 @@
               }}</template>
             </NsToggle>
             <NsToggle
+              value="signProfiles"
+              :label="$t('settings.sign_profiles')"
+              v-model="isSignProfilesEnabled"
+              :disabled="stillLoading"
+              class="mg-bottom"
+            >
+              <template #tooltip>
+                {{ $t("settings.sign_profiles_tooltip") }}
+              </template>
+              <template slot="text-left">{{
+                $t("settings.disabled")
+              }}</template>
+              <template slot="text-right">{{
+                $t("settings.enabled")
+              }}</template>
+            </NsToggle>
+            <NsInlineNotification
+              v-if="signingNotice"
+              :kind="signingNotice.kind"
+              :title="signingNotice.title"
+              :description="signingNotice.description"
+              :showCloseButton="false"
+              class="mg-bottom maxwidth"
+            />
+            <h4 class="mg-bottom">{{ $t("settings.domain_defaults_title") }}</h4>
+            <p class="mg-bottom maxwidth">
+              {{ $t("settings.domain_defaults_description") }}
+            </p>
+            <NsToggle
               value="displayNames"
               :label="$t('settings.display_names')"
               v-model="isDisplayNamesEnabled"
@@ -119,32 +148,7 @@
               :showCloseButton="false"
               class="mg-bottom maxwidth"
             />
-            <NsToggle
-              value="signProfiles"
-              :label="$t('settings.sign_profiles')"
-              v-model="isSignProfilesEnabled"
-              :disabled="stillLoading"
-              class="mg-bottom"
-            >
-              <template #tooltip>
-                {{ $t("settings.sign_profiles_tooltip") }}
-              </template>
-              <template slot="text-left">{{
-                $t("settings.disabled")
-              }}</template>
-              <template slot="text-right">{{
-                $t("settings.enabled")
-              }}</template>
-            </NsToggle>
-            <NsInlineNotification
-              v-if="signingNotice"
-              :kind="signingNotice.kind"
-              :title="signingNotice.title"
-              :description="signingNotice.description"
-              :showCloseButton="false"
-              class="mg-bottom maxwidth"
-            />
-            <h4 class="mg-bottom">{{ $t("settings.groupware_title") }}</h4>
+            <h5 class="mg-bottom">{{ $t("settings.groupware_title") }}</h5>
             <p class="mg-bottom maxwidth">
               {{ $t("settings.groupware_description") }}
             </p>

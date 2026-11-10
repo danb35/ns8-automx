@@ -56,6 +56,9 @@ newly_disabled_with_dns_removal = []
 # on a real node, 2026-09-22, right after the reconcile()-only lock was
 # verified to fix the SIGTERM race it was added for -- see reconcile.py).
 with reconcile.lock():
+    # Read again under the lock: the copy above is only for validation, and
+    # set-domain-settings may have changed a domain's overrides since.
+    domains_state = state.load_domains()
     for domain, flags in requested.items():
         was_enabled = domains_state.get(domain, {}).get("enabled", False)
         domains_state.setdefault(domain, {})["enabled"] = flags["enabled"]

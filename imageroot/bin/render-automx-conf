@@ -138,39 +138,68 @@ def main():
     sign = write_signing(signing_paths, service_host) if settings["sign_profiles"] else False
     if not settings["sign_profiles"]:
         clear_rendered_state(*signing_paths.values())
+    # Per-domain settings (DESIGN.md 12, 0.4): [global] carries the
+    # instance-wide defaults, and a domain gets its own section only when
+    # what it hands out differs from them, so an instance without overrides
+    # renders exactly as before. resolve_aliases needs no section: it only
+    # changes which aliases refresh-aliases writes into the map.
+    defaults = state.effective_settings(settings, {})
+    per_domain = {d: state.effective_settings(settings, domains_state.get(d)) for d in enabled_domains}
+    urls = groupware_urls(rdb, [defaults, *per_domain.values()], mail_module_id, user_domain)
+    default_profile = profile_options(defaults, urls)
+    domain_sections = {}
+    for domain, effective in per_domain.items():
+        profile = profile_options(effective, urls)
+        if profile != default_profile:
+            domain_sections[domain] = profile
     write_automx_conf(
         automx_conf_path,
         service_host,
         enabled_domains,
         mail_hostname,
-        settings["display_names"],
         sign=sign,
-        **groupware_urls(rdb, settings, mail_module_id, user_domain),
+        domain_sections=domain_sections,
+        **default_profile,
     )
 
     json.dump(enabled_domains, sys.stdout)
 
 
-def groupware_urls(rdb, settings, mail_module_id, user_domain):
-    """{"dav_url", "activesync_url"} for the configured groupware modules.
-    A module that was chosen but is no longer usable (removed, DAV switched
-    off, bound elsewhere) is left out with a warning rather than failing
-    the render: mail autoconfiguration must keep working without it."""
-    wanted = {"dav_url": settings.get("dav_module"), "activesync_url": settings.get("activesync_module")}
-    urls = {"dav_url": None, "activesync_url": None}
-    if not any(wanted.values()):
-        return urls  # no Redis scan, no Traefik call
+def groupware_urls(rdb, effective_list, mail_module_id, user_domain):
+    """{(service, module_id): url} for every groupware module chosen in
+    effective_list (effective settings: the defaults and each domain's),
+    service being "dav_url" or "activesync_url". A module that was chosen
+    but is no longer usable (removed, DAV switched off, bound elsewhere) maps
+    to None, with one warning: mail autoconfiguration must keep working
+    without it."""
+    wanted = {
+        (service, effective[setting])
+        for effective in effective_list
+        for setting, service in groupware.SERVICE_OF_SETTING.items()
+        if effective.get(setting)
+    }
+    if not wanted:
+        return {}  # no Redis scan, no Traefik call
     candidates = groupware.list_candidates(rdb, mail_module_id, user_domain)
-    for service, module_id in wanted.items():
-        if not module_id:
-            continue
-        urls[service] = groupware.find(candidates, module_id, service)
-        if urls[service] is None:
+    urls = {}
+    for service, module_id in sorted(wanted):
+        urls[(service, module_id)] = groupware.find(candidates, module_id, service)
+        if urls[(service, module_id)] is None:
             print(
                 agent.SD_WARNING + f"{module_id} no longer provides {service.removesuffix('_url')}, not publishing it",
                 file=sys.stderr,
             )
     return urls
+
+
+def profile_options(effective, urls):
+    """The write_automx_conf() keyword arguments for one set of effective
+    settings."""
+    return {
+        "display_names": effective["display_names"],
+        "dav_url": urls.get(("dav_url", effective["dav_module"])),
+        "activesync_url": urls.get(("activesync_url", effective["activesync_module"])),
+    }
 
 
 def write_signing(paths, service_host):
@@ -249,7 +278,11 @@ def write_automx_conf(
     dav_url=None,
     activesync_url=None,
     sign=False,
+    domain_sections=None,
 ):
+    """domain_sections: {domain: {"display_names", "dav_url",
+    "activesync_url"}} for the domains whose settings differ from the
+    defaults given by the other arguments."""
     # interpolation=None: the script backend's argv template is a literal
     # "%u %d %s" (automx's own macros, not configparser's) -- with the
     # default BasicInterpolation, ConfigParser rejects a bare "%u" as an
@@ -267,12 +300,30 @@ def write_automx_conf(
         config["automx"]["mobileconfig_signing_certificate"] = f"{CONTAINER_SIGNING_DIR}/cert.pem"
         config["automx"]["mobileconfig_signing_key"] = f"{CONTAINER_SIGNING_DIR}/key.pem"
 
+    config["global"] = profile_section(mail_hostname, display_names, dav_url, activesync_url)
+
+    # automx uses the section named exactly after the address's domain
+    # instead of [global], with no inheritance (DESIGN.md 12). Each domain
+    # section is therefore complete on its own, script stanza included:
+    # automx expands ${login} as each section is read, so a script run from
+    # a followed section would come too late.
+    for domain, options in sorted((domain_sections or {}).items()):
+        config[domain.lower()] = profile_section(mail_hostname, **options)
+
+    out = io.StringIO()
+    config.write(out)
+    atomic_write(path, out.getvalue(), mode=0o640)
+
+
+def profile_section(mail_hostname, display_names, dav_url=None, activesync_url=None):
+    """One complete automx profile section: the lookup, IMAP and SMTP, the
+    display name if wanted, and the groupware endpoints given."""
     # backend = script, not backend = ldap: automx's native LDAP backend
     # can't express "login attribute equals local-part, else mail equals
     # full address" (only %s/full-address substitution in its filter) and
     # has no fallback on a miss. automx-ldap-lookup implements both the
     # lookup rule and the fallback itself (DESIGN.md 3.3).
-    global_section = {
+    section = {
         "backend": "script",
         "script": "/usr/local/bin/automx-ldap-lookup %u %d %s",
         "result_attrs": "login display_name",
@@ -291,8 +342,8 @@ def write_automx_conf(
         "smtp_auth_identity": "${login}",
     }
     if display_names:
-        global_section["account_name"] = "${display_name}"
-        global_section["account_name_short"] = "${display_name}"
+        section["account_name"] = "${display_name}"
+        section["account_name_short"] = "${display_name}"
 
     # Groupware endpoints (DESIGN.md 2, v2). The login is the same directory
     # login as for mail. http-basic is what keeps CalDAV/CardDAV in Apple
@@ -300,21 +351,16 @@ def write_automx_conf(
     # its auth methods is password-based.
     if dav_url:
         for prefix in ("caldav", "carddav"):
-            global_section[prefix] = "yes"
-            global_section[f"{prefix}_url"] = dav_url
-            global_section[f"{prefix}_auth"] = "http-basic"
-            global_section[f"{prefix}_auth_identity"] = "${login}"
+            section[prefix] = "yes"
+            section[f"{prefix}_url"] = dav_url
+            section[f"{prefix}_auth"] = "http-basic"
+            section[f"{prefix}_auth_identity"] = "${login}"
     if activesync_url:
-        global_section["activesync"] = "yes"
-        global_section["activesync_url"] = activesync_url
-        global_section["activesync_auth"] = "http-basic"
-        global_section["activesync_auth_identity"] = "${login}"
-
-    config["global"] = global_section
-
-    out = io.StringIO()
-    config.write(out)
-    atomic_write(path, out.getvalue(), mode=0o640)
+        section["activesync"] = "yes"
+        section["activesync_url"] = activesync_url
+        section["activesync_auth"] = "http-basic"
+        section["activesync_auth_identity"] = "${login}"
+    return section
 
 
 def clear_rendered_state(*paths):
