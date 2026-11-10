@@ -629,7 +629,16 @@ Probably staying instance-wide: `service_host` (one name for the SRV/CNAME targe
 
 To work out before implementing:
 
-- **VERIFY:** how automx 3 overrides `[global]` for one domain (a section per domain, or several provider sections chosen by domain), and whether the `script` backend and the `caldav`/`carddav`/`activesync` keys are allowed in it. If automx can't do this, the lookup script can still vary its own output per domain (it receives `%d`), which covers display names and aliases but not the groupware URLs.
+- **RESOLVED (2026-11-10, read of `croessner/automx` `src/automx/configuration.py` at `v3.0.0-beta.5`; not yet checked with `config validate`):** automx supports a section per domain, and every key we use is allowed in it.
+  - `resolve()` uses the section named exactly after the address's domain (`[example.com]`) if there is one, else `[global]`. It replaces `[global]`, with no inheritance or merge. Matching is exact: `[example.com]` does not cover `sub.example.com`.
+  - `backend = global` in a domain section hands the whole request to `[global]` and ignores the section's own keys, so it is no use for overrides.
+  - `follow = <section>` continues with another named section after the current one (chains up to 16 deep, cycles refused). A plain backend there overwrites services the earlier section set; an `*_append` backend (`static_append`, `script_append`) only adds protocols not set yet.
+  - **Variables are expanded per section, as each section is applied.** If the `script` backend ran in a followed section, `${login}` and `${display_name}` in the domain section would already have become empty strings, with no error. So the `script` stanza (`script`, `result_attrs`, `separator`) goes in each domain's own section.
+  - **A followed section cannot unset a service** (services are kept per protocol). Groupware keys therefore go only in the sections of the domains that have them, never in a shared section.
+  - **`account_name` is always overwritten by a later section**, `_append` or not (`_append` protects only services and static files), so it stays out of any shared section.
+  - Instance-wide by design, in `[automx]`: `provider`, the `domains` allowlist, `autodiscover_v2` and Mobileconfig signing. This matches the settings listed above as staying instance-wide.
+
+  Consequence for the renderer: one section per enabled domain, each with the script stanza, its own `account_name` (only where display names are on) and its own `caldav`/`carddav`/`activesync` keys. IMAP and SMTP can be shared through `follow = <common section>` with `backend = static_append`, or written into every section; writing self-contained sections is simpler and avoids the ordering rules above. `display_names` and `resolve_aliases` could also be done in the lookup script alone (it receives `%d`), but the groupware URLs need the per-domain sections.
 - The groupware candidates for a domain are those on the mail instance's user domain (2), the same set for every domain while one mail instance is supported, so the per-domain choice is between the same modules.
 - Storage: per-domain overrides belong next to the `enabled` flag in `state/domains.json`, which is already backed up; `set-domains` (or a new action) takes them, and `get-domains` returns the effective values.
 - UI: per-domain values in the Domains table (a row action opening the domain's settings), with Settings keeping the defaults.
