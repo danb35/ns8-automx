@@ -662,9 +662,9 @@ Implementation:
 - Refused with nothing stored: Nextcloud as ActiveSync provider (`groupware_not_available`), an unknown domain (`domain_not_found`) and an instance-wide key (schema). Disabling the domain kept its overrides and dropped its section; enabling it again brought both back.
 - Seen, as before 0.4: the alias map refresh after a change runs without blocking, so for a few seconds after a change that turns alias resolution on, an alias still gets the fallback (bare address, and no display name since an alias is not in LDAP).
 
-Not checked there: the dialog and the Settings page in a browser (the LAN node's self-signed certificate), and a backup and restore with overrides (`domains.json` is backed up as before).
+The Domain settings dialog and the Settings page were checked in a browser on the same instance by the developer and look right. Not checked: a backup and restore with overrides (`domains.json` is backed up as before).
 
-**VERIFY on a real node:** the dialog and the Settings page in a browser; a backup and restore keeps the overrides.
+**VERIFY on a real node:** a backup and restore keeps the overrides.
 
 ### Other later phases
 
