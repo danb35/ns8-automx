@@ -655,7 +655,16 @@ Implementation:
 - **UI.** The Domains row menu has **Domain settings**, a dialog with one select per setting: Default (showing the current default), on/off or a provider, and None for the providers. A module the domain names that is no longer a provider stays listed as "no longer available", so the select never silently shows something else. A **Custom settings** tag marks domains with overrides. Settings groups the four under "Defaults for all domains", after the instance-wide signing toggle.
 - **Tests.** Unit tests for the state helpers, `groupware.unavailable()`, `set-domain-settings`, `refresh-aliases`, and the renderer's per-domain sections through `main()`. The build smoke check (`build-images.sh`) adds a second domain with its own section to `tests/fixtures/synthetic-automx.conf`, validates it with `automx config validate`, and checks that only that domain's Autoconfig carries its CalDAV URL, which confirms the section-per-domain behavior read from the source against the built image.
 
-**VERIFY on a real node:** an override takes effect on a running instance without a restart other than `reload-automx`'s own (display names and groupware per domain from Autoconfig, Autodiscover and the Apple profile; aliases per domain after a refresh); the dialog and the Settings page in a browser; a backup and restore keeps the overrides.
+**LAN test cluster (2026-11-10, Rocky 9 node 1, `automx33` on `mail1`/OpenLDAP `2v6.in`, with SOGo, WebTop and Nextcloud):** updating from 0.3.0 to the branch image left Autoconfig, MobileSync and the Apple profile contents byte-identical for a user and an alias, and `automx.conf` with `[global]` only. A temporary mail domain `perdomain.test` (users added, plus an alias `fred.flintstone@` → `fred`) was enabled next to `2v6.in`, and the responses were read over all three protocols from the container:
+
+- With overrides `display_names: false`, `resolve_aliases: false`, `dav_module: nextcloud1`, `activesync_module: null` (defaults on, SOGo, WebTop): `perdomain.test` got a self-contained section and handed out no display name (the Apple profile's account name falls back to the address), Nextcloud's DAV URL in Autoconfig and the profile, no ActiveSync (MobileSync answers error 602), and its alias as the bare address, dropped from the map by the refresh the reconcile starts. `2v6.in` was unchanged. `set-domain-settings` took about 25 s, the time of one reconcile.
+- The reverse, with the defaults turned off and WebTop for both services: overrides turning display names and aliases on for `perdomain.test` brought both back for it alone, and it inherited WebTop's URLs; only its alias was in the map.
+- Refused with nothing stored: Nextcloud as ActiveSync provider (`groupware_not_available`), an unknown domain (`domain_not_found`) and an instance-wide key (schema). Disabling the domain kept its overrides and dropped its section; enabling it again brought both back.
+- Seen, as before 0.4: the alias map refresh after a change runs without blocking, so for a few seconds after a change that turns alias resolution on, an alias still gets the fallback (bare address, and no display name since an alias is not in LDAP).
+
+Not checked there: the dialog and the Settings page in a browser (the LAN node's self-signed certificate), and a backup and restore with overrides (`domains.json` is backed up as before).
+
+**VERIFY on a real node:** the dialog and the Settings page in a browser; a backup and restore keeps the overrides.
 
 ### Other later phases
 
