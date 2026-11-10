@@ -662,9 +662,9 @@ Implementation:
 - Refused with nothing stored: Nextcloud as ActiveSync provider (`groupware_not_available`), an unknown domain (`domain_not_found`) and an instance-wide key (schema). Disabling the domain kept its overrides and dropped its section; enabling it again brought both back.
 - Seen, as before 0.4: the alias map refresh after a change runs without blocking, so for a few seconds after a change that turns alias resolution on, an alias still gets the fallback (bare address, and no display name since an alias is not in LDAP).
 
-The Domain settings dialog and the Settings page were checked in a browser on the same instance by the developer and look right. Not checked: a backup and restore with overrides (`domains.json` is backed up as before).
+The Domain settings dialog and the Settings page were checked in a browser on the same instance by the developer and look right.
 
-**VERIFY on a real node:** a backup and restore keeps the overrides.
+**`tests/integration` (2026-11-10, same cluster, branch image):** all 15 tests pass, with fred, the alias `fred.flintstone@2v6.in` and dnshelper present. Two are new for 0.4: `test_05c` turns display names off for the mail domain alone (its own section in `automx.conf`, no display name in Autoconfig), removes the override (section and name back), and checks that an unknown domain is refused; `test_10` sets overrides before the backup and finds them on the instance restored alongside the original. `automx33` was removed for the run (the suite needs node 1 without an automx instance) and reinstalled from the branch image as `automx38` with its settings, mail server and port, and Autoconfig for a user and an alias was byte-identical to what `automx33` served under 0.3.0. A dnshelper access rule naming `module/automx33` no longer matches the new instance.
 
 ### Other later phases
 

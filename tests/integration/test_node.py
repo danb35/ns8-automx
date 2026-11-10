@@ -8,6 +8,7 @@ ghcr.io/danb35/automx:latest), the artifact a release ships.
 import ast
 import json
 import os
+import re
 import subprocess
 import time
 import unittest
@@ -290,6 +291,38 @@ class NodeIntegration(unittest.TestCase):
         api(cls.automx, 'configure-module', {'resolve_aliases': True})
         self.assertIn(expected, body)
 
+    def test_05c_per_domain_settings_override_the_defaults(self):
+        # DESIGN.md 12 (0.4): a domain's own settings win over Settings, in
+        # a section of its own, and removing them brings the defaults back.
+        if not (TEST_USER_LOGIN and TEST_USER_MAIL):
+            self.skipTest('set TEST_USER_LOGIN and TEST_USER_MAIL to test per-domain display names')
+        cls = type(self)
+        url = '/mail/config-v1.1.xml?emailaddress=%s' % TEST_USER_MAIL
+
+        def display_name():
+            m = re.search(r'<displayName>([^<]*)', curl_automx(cls.automx, url))
+            return m.group(1) if m else ''
+
+        self.assertTrue(display_name(), 'display names are on by default and the test user has one')
+        rc, out = api(cls.automx, 'set-domain-settings',
+                      {'domain': MAIL_DOMAIN, 'overrides': {'display_names': False}})
+        self.assertEqual(out['settings']['display_names'], False)
+        conf = ssh('runagent -m %s cat automx.conf' % cls.automx).stdout
+        self.assertIn('[%s]' % MAIL_DOMAIN.lower(), conf)
+        self.assertEqual(display_name(), '')
+        _, domains = api(cls.automx, 'get-domains', {})
+        entry = next(d for d in domains['domains'] if d['domain'] == MAIL_DOMAIN)
+        self.assertEqual(entry['overrides'], {'display_names': False})
+
+        api(cls.automx, 'set-domain-settings', {'domain': MAIL_DOMAIN, 'overrides': {}})
+        self.assertNotIn('[%s]' % MAIL_DOMAIN.lower(),
+                         ssh('runagent -m %s cat automx.conf' % cls.automx).stdout)
+        self.assertTrue(display_name())
+
+        rc, out = api(cls.automx, 'set-domain-settings',
+                      {'domain': 'not-a-mail-domain.invalid', 'overrides': {}}, check=False)
+        self.assertNotEqual(rc, 0)
+
     def test_06_dns_status_reflects_dnshelper_presence(self):
         cls = type(self)
         rc, out = api(cls.automx, 'get-dnshelper-status', {})
@@ -339,6 +372,9 @@ class NodeIntegration(unittest.TestCase):
         # defaults (both true) can't pass.
         api(cls.automx, 'configure-module', {'http2https': False, 'display_names': False})
         api(cls.automx, 'set-domains', {'domains': {MAIL_DOMAIN: {'enabled': True}}})
+        # A domain's own settings live in state/domains.json too (DESIGN.md 12).
+        overrides = {'resolve_aliases': False, 'dav_module': None}
+        api(cls.automx, 'set-domain-settings', {'domain': MAIL_DOMAIN, 'overrides': overrides})
 
         # NS8's built-in "cluster" backup destination (restic over the node's
         # own WireGuard address): needs no external service, and is removed
@@ -382,6 +418,7 @@ class NodeIntegration(unittest.TestCase):
         self.assertEqual(rc, 0)
         entry = next(d for d in out['domains'] if d['domain'] == MAIL_DOMAIN)
         self.assertTrue(entry['enabled'], 'state/domains.json should have round-tripped through the backup')
+        self.assertEqual(entry['overrides'], overrides, "the domain's own settings should have round-tripped too")
         rc, config = api(restored_id, 'get-configuration', {})
         self.assertFalse(config['http2https'], 'state/settings.json should have round-tripped through the backup')
         self.assertFalse(config['display_names'])
