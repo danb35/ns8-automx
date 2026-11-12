@@ -1,6 +1,6 @@
 name: "Clean up registry"
 
-# Deletes the ghcr.io image that "Publish images" made for a branch or tag when
+# Deletes the ghcr.io images that "Publish images" made for a branch or tag when
 # that branch or tag is deleted. The shared NethServer action looks the image up
 # under basename(ref), but the publish workflow tags it with the ref where every
 # "/" became "-", so for a branch like feature/x it never found anything.
@@ -19,7 +19,8 @@ permissions:
   packages: write
 
 env:
-  IMAGES: automx
+  # the module image and the application image build-images.sh publishes beside it
+  IMAGES: automx automx-app
 
 jobs:
   delete_images:
