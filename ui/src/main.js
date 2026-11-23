@@ -40,14 +40,25 @@ Vue.config.productionTip = false;
 import VueI18n from "vue-i18n";
 import { loadLanguage } from "./i18n";
 
+// Translations kept per region; every other language is found by its first two
+// letters ("de-AT" uses de, "pt-PT" uses pt, "pt-BR" uses pt_BR).
+const REGIONAL = ["pt_BR"];
+
 loadI18n();
 
 async function loadI18n() {
-  const navigatorLang = navigator.language.substring(0, 2);
+  const regional = navigator.language.replace("-", "_");
+  const navigatorLang = REGIONAL.includes(regional)
+    ? regional
+    : navigator.language.substring(0, 2);
   const messages = await loadLanguage(navigatorLang);
   Vue.use(VueI18n);
-  const i18n = new VueI18n();
+  // English fills in any string a translation lacks.
+  const i18n = new VueI18n({ fallbackLocale: "en", silentFallbackWarn: true });
   i18n.setLocaleMessage(navigatorLang, messages.default);
+  if (navigatorLang !== "en") {
+    i18n.setLocaleMessage("en", (await loadLanguage("en")).default);
+  }
   i18n.locale = navigatorLang;
 
   new Vue({
