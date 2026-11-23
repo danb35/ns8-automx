@@ -21,6 +21,10 @@
 FROM python:3.14.10-slim-trixie AS builder
 
 ARG AUTOMX_REF=v3.0.0-beta.5
+# dnspython is pinned here for automx-dns-check (DESIGN.md 5.4); Renovate
+# tracks it through the annotation below (NethServer/.github ns8 preset).
+# renovate: datasource=pypi packageName=dnspython
+ARG DNSPYTHON_VERSION=2.9.2
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git \
@@ -35,7 +39,7 @@ RUN git clone --depth=1 --branch="${AUTOMX_REF}" \
 
 RUN python -m venv /opt/automx \
     && /opt/automx/bin/pip install --no-cache-dir --upgrade pip \
-    && /opt/automx/bin/pip install --no-cache-dir '.[ldap]' dnspython==2.9.1
+    && /opt/automx/bin/pip install --no-cache-dir '.[ldap]' dnspython=="${DNSPYTHON_VERSION}"
 
 FROM python:3.14.10-slim-trixie AS runtime
 
