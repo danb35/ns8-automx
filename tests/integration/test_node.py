@@ -31,10 +31,16 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def ssh(command, stdin=None, check=True):
-    args = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10']
-    if KEY_FILE:
-        args += ['-i', KEY_FILE]
-    p = subprocess.run(args + ['root@' + NODE, command], input=stdin, capture_output=True, text=True, timeout=900)
+    if NODE == 'local':
+        # Running on the node itself, as the QEMU CI does (tests/30__integration.robot):
+        # its test container has no ssh client.
+        args = ['bash', '-c', command]
+    else:
+        args = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10']
+        if KEY_FILE:
+            args += ['-i', KEY_FILE]
+        args += ['root@' + NODE, command]
+    p = subprocess.run(args, input=stdin, capture_output=True, text=True, timeout=900)
     if check and p.returncode:
         raise AssertionError('%s failed (%d): %s' % (command[:80], p.returncode, (p.stderr or p.stdout)[-500:]))
     return p
