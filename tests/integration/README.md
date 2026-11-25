@@ -43,6 +43,11 @@ certificate creation itself is only exercised on a node that can satisfy both.
 
 ## Running
 
+The QEMU CI runs this file on every published image: `tests/10__stack.robot` sets up the node,
+and `tests/30__integration.robot` copies this file there and runs it with `NS8_NODE=local`, which
+runs each command on the node itself instead of over SSH.
+
+
 ```bash
 NS8_NODE=192.168.1.20 NS8_SSH_KEY=~/.ssh/id_ed25519 \
 MAIL_MODULE_ID=mail1 MAIL_DOMAIN=example.test \
