@@ -56,7 +56,8 @@ Domain entry
     [Documentation]    get-domains' entry for the CI mail domain.
     [Arguments]    ${module_id}
     ${out} =    Run action    module/${module_id}/get-domains    {}
-    ${entry} =    Evaluate    next(d for d in $out['domains'] if d['domain'] == $MAIL_DOMAIN)
+    # The name as a literal: a $variable inside a generator is out of its scope
+    ${entry} =    Evaluate    next(d for d in $out['domains'] if d['domain'] == '${MAIL_DOMAIN}')
     RETURN    ${entry}
 
 DNS statuses
